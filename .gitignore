@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+__pycache__/
+*.py[cod]
+.Python
+venv/
+.venv/
+env/
+
+# Build / dist
+.next/
+out/
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# Env & secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# IDE & OS
+.idea/
+.vscode/
+.DS_Store
+*.swp
+
+# Test / coverage
+coverage/
+.nyc_output/
+htmlcov/
+.pytest_cache/
+.ruff_cache/
+playwright-report/
+test-results/
+
+# Misc
+*.log
+.turbo
