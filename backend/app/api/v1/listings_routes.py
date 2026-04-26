@@ -20,6 +20,7 @@ class ListingCreate(BaseModel):
     location_state: str = Field(max_length=8)
     cost_tier: str = Field(pattern="^(free|reduced|market)$")
     availability_text: str
+    contact_phone: str | None = Field(None, max_length=64)
     contact_email: EmailStr
     description: str | None = None
     hcaptcha_token: str | None = None
@@ -69,6 +70,7 @@ async def create_listing(
         raise HTTPException(status_code=400, detail="Invalid email")
     if not await verify_hcaptcha(body.hcaptcha_token, request.client.host if request.client else None):
         raise HTTPException(status_code=400, detail="Captcha failed")
+    phone = (body.contact_phone or "").strip() or None
     row = Listing(
         type=body.listing_type,
         brand_or_space_name=body.brand_or_space_name,
@@ -76,6 +78,7 @@ async def create_listing(
         location_state=body.location_state,
         cost_tier=body.cost_tier,
         availability_text=body.availability_text,
+        contact_phone=phone[:64] if phone else None,
         contact_email=str(body.contact_email),
         description=body.description,
         status="pending",

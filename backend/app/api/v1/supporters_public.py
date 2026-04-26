@@ -20,6 +20,7 @@ class SpaceOfferCreate(BaseModel):
     location_state: str
     cost_tier: str = Field(pattern="^(free|reduced|market)$")
     availability_text: str
+    contact_phone: str | None = Field(None, max_length=64)
     contact_email: EmailStr
     description: str | None = None
     hcaptcha_token: str | None = None
@@ -29,6 +30,7 @@ class ServiceOfferCreate(BaseModel):
     service_type: str = Field(pattern="^(legal|marketing|logistics|tech|other)$")
     availability: str
     cost_tier: str = Field(pattern="^(pro_bono|reduced|paid)$")
+    contact_phone: str | None = Field(None, max_length=64)
     contact_email: EmailStr
     description: str | None = None
     hcaptcha_token: str | None = None
@@ -52,12 +54,14 @@ async def post_space(request: Request, body: SpaceOfferCreate, db: AsyncSession 
         raise HTTPException(status_code=400, detail="Invalid email")
     if not await verify_hcaptcha(body.hcaptcha_token, request.client.host if request.client else None):
         raise HTTPException(status_code=400, detail="Captcha failed")
+    phone = (body.contact_phone or "").strip() or None
     row = SpaceOffer(
         space_type=body.space_type,
         location_city=body.location_city,
         location_state=body.location_state,
         cost_tier=body.cost_tier,
         availability_text=body.availability_text,
+        contact_phone=phone[:64] if phone else None,
         contact_email=str(body.contact_email),
         description=body.description,
         status="pending",
@@ -77,10 +81,12 @@ async def post_services(request: Request, body: ServiceOfferCreate, db: AsyncSes
         raise HTTPException(status_code=400, detail="Invalid email")
     if not await verify_hcaptcha(body.hcaptcha_token, request.client.host if request.client else None):
         raise HTTPException(status_code=400, detail="Captcha failed")
+    phone = (body.contact_phone or "").strip() or None
     row = ServiceOffer(
         service_type=body.service_type,
         availability=body.availability,
         cost_tier=body.cost_tier,
+        contact_phone=phone[:64] if phone else None,
         contact_email=str(body.contact_email),
         description=body.description,
         status="pending",

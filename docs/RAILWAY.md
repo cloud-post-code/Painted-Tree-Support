@@ -49,6 +49,8 @@ The running image keeps Alembic and `alembic.ini` under `/app/backend`.
 
 **Bootstrap admin** — same as split deploy, using your public `https://` base URL.
 
+**Vendor pages:** sign in at `/admin/login`, then **Admin → Vendors → Edit** on any vendor to change copy, images, links, and status without redeploying.
+
 ---
 
 ## Option 2 — Split `api` + `web`
@@ -101,6 +103,8 @@ curl -X POST "$API_URL/api/v1/admin/seed-first-user" \
 ```
 
 Then sign in at `https://your-web-url/admin/login`.
+
+**Vendor directory content** is editable in production without redeploying: after login go to **Admin → Vendors**, use **Edit** on any vendor, then **Save changes**. Updates are stored in Postgres and show on public `/vendors` pages immediately.
 
 ### Weekly featured vendor cron
 

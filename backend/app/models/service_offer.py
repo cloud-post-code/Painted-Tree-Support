@@ -14,6 +14,7 @@ class ServiceOffer(Base):
     availability: Mapped[str] = mapped_column(Text)
     cost_tier: Mapped[str] = mapped_column(String(32))
     contact_email: Mapped[str] = mapped_column(String(255))
+    contact_phone: Mapped[str | None] = mapped_column(String(64), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="pending", index=True)
     published_ack: Mapped[bool] = mapped_column(Boolean, default=False)

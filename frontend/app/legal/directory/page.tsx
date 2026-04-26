@@ -11,6 +11,8 @@ type Org = {
   states: string[];
   areas_of_practice: string[];
   website: string;
+  contact_phone?: string | null;
+  contact_email?: string | null;
 };
 
 export default function LegalDirectoryPage() {
@@ -71,6 +73,24 @@ export default function LegalDirectoryPage() {
             <p className="text-black/60">
               {o.type} · States: {(o.states || []).join(", ") || "national"}
             </p>
+            <div className="mt-2 space-y-1 text-sm">
+              {o.contact_phone ? (
+                <p>
+                  <span className="text-black/55">Phone: </span>
+                  <a href={`tel:${o.contact_phone.replace(/\s/g, "")}`} className="font-medium text-[var(--vrr-teal)] hover:underline">
+                    {o.contact_phone}
+                  </a>
+                </p>
+              ) : null}
+              {o.contact_email ? (
+                <p>
+                  <span className="text-black/55">Email: </span>
+                  <a href={`mailto:${o.contact_email}`} className="font-medium text-[var(--vrr-teal)] hover:underline">
+                    {o.contact_email}
+                  </a>
+                </p>
+              ) : null}
+            </div>
             <a href={o.website} target="_blank" rel="noreferrer" className="mt-2 inline-block text-[var(--vrr-teal)]">
               Website
             </a>

@@ -86,8 +86,14 @@ def _vendor_public(v: Vendor) -> dict:
         "city": v.city,
         "state": v.state,
         "bio_150": v.bio_150,
+        "description_full": v.description_full,
+        "pt_category_names": v.pt_category_names or [],
+        "pt_current_locations": v.pt_current_locations or [],
         "shop_links": v.shop_links or [],
         "featured": v.featured,
+        "logo_url": v.logo_url,
+        "banner_url": v.banner_url,
+        "pt_previous_locations": v.pt_previous_locations or [],
     }
 
 

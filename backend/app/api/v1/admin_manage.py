@@ -4,7 +4,7 @@ from datetime import date, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -425,6 +425,7 @@ async def admin_listings(
             "location_state": r.location_state,
             "cost_tier": r.cost_tier,
             "availability_text": r.availability_text,
+            "contact_phone": r.contact_phone,
             "contact_email": r.contact_email,
             "description": r.description,
             "status": r.status,
@@ -505,6 +506,58 @@ async def admin_delete_community(
 
 
 # --- Vendors ---
+def _vendor_admin_summary(r: Vendor) -> dict:
+    return {
+        "id": r.id,
+        "brand_name": r.brand_name,
+        "category": r.category,
+        "city": r.city,
+        "state": r.state,
+        "bio_150": r.bio_150,
+        "shop_links": r.shop_links,
+        "submitted_email": r.submitted_email,
+        "status": r.status,
+        "featured": r.featured,
+        "pt_listing_id": r.pt_listing_id,
+        "logo_url": r.logo_url,
+        "banner_url": r.banner_url,
+        "pt_previous_locations": r.pt_previous_locations,
+    }
+
+
+def _vendor_admin_full(r: Vendor) -> dict:
+    d = _vendor_admin_summary(r)
+    d["description_full"] = r.description_full
+    d["pt_category_names"] = r.pt_category_names or []
+    d["pt_current_locations"] = r.pt_current_locations or []
+    return d
+
+
+class VendorAdminShopLink(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+    label: str = Field(max_length=64)
+    url: str = Field(max_length=2048)
+
+
+class VendorAdminUpdate(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    brand_name: str | None = Field(None, max_length=255)
+    category: str | None = Field(None, pattern="^(jewelry|food|clothing|art|beauty|home|other)$")
+    city: str | None = Field(None, max_length=255)
+    state: str | None = Field(None, max_length=8)
+    bio_150: str | None = Field(None, max_length=160)
+    description_full: str | None = None
+    logo_url: str | None = Field(None, max_length=2048)
+    banner_url: str | None = Field(None, max_length=2048)
+    pt_previous_locations: list[str] | None = None
+    pt_current_locations: list[str] | None = None
+    pt_category_names: list[str] | None = None
+    shop_links: list[VendorAdminShopLink] | None = Field(None, max_length=4)
+    status: str | None = Field(None, pattern="^(pending|published|removed)$")
+    featured: bool | None = None
+
+
 @router.get("/vendors")
 async def admin_vendors(
     admin: CurrentAdmin, db: Annotated[AsyncSession, Depends(get_db)], status: str | None = None
@@ -513,21 +566,34 @@ async def admin_vendors(
     if status:
         q = q.where(Vendor.status == status)
     rows = (await db.execute(q)).scalars().all()
-    return [
-        {
-            "id": r.id,
-            "brand_name": r.brand_name,
-            "category": r.category,
-            "city": r.city,
-            "state": r.state,
-            "bio_150": r.bio_150,
-            "shop_links": r.shop_links,
-            "submitted_email": r.submitted_email,
-            "status": r.status,
-            "featured": r.featured,
-        }
-        for r in rows
-    ]
+    return [_vendor_admin_summary(r) for r in rows]
+
+
+@router.get("/vendors/{vid}")
+async def admin_vendor_get(admin: CurrentAdmin, vid: int, db: Annotated[AsyncSession, Depends(get_db)]) -> dict:
+    row = (await db.execute(select(Vendor).where(Vendor.id == vid))).scalar_one_or_none()
+    if not row:
+        raise HTTPException(404, "Not found")
+    return _vendor_admin_full(row)
+
+
+@router.patch("/vendors/{vid}")
+async def admin_vendor_patch(
+    admin: CurrentAdmin, vid: int, body: VendorAdminUpdate, db: Annotated[AsyncSession, Depends(get_db)]
+) -> dict:
+    row = (await db.execute(select(Vendor).where(Vendor.id == vid))).scalar_one_or_none()
+    if not row:
+        raise HTTPException(404, "Not found")
+    data = body.model_dump(exclude_unset=True)
+    if "shop_links" in data and data["shop_links"] is not None:
+        data["shop_links"] = [dict(x) for x in data["shop_links"]][:4]
+    for k, v in data.items():
+        if v == "" and k in ("logo_url", "banner_url", "description_full"):
+            v = None
+        setattr(row, k, v)
+    await db.commit()
+    await db.refresh(row)
+    return _vendor_admin_full(row)
 
 
 @router.put("/vendors/{vid}")
@@ -726,6 +792,7 @@ async def admin_space(admin: CurrentAdmin, db: Annotated[AsyncSession, Depends(g
             "location_city": r.location_city,
             "location_state": r.location_state,
             "cost_tier": r.cost_tier,
+            "contact_phone": r.contact_phone,
             "contact_email": r.contact_email,
             "status": r.status,
         }
@@ -757,6 +824,7 @@ async def admin_svc(admin: CurrentAdmin, db: Annotated[AsyncSession, Depends(get
         {
             "id": r.id,
             "service_type": r.service_type,
+            "contact_phone": r.contact_phone,
             "contact_email": r.contact_email,
             "status": r.status,
         }

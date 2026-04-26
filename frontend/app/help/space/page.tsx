@@ -54,6 +54,10 @@ export default function HelpSpacePage() {
           <Textarea name="availability_text" required className="mt-1" />
         </div>
         <div>
+          <Label>Contact phone</Label>
+          <Input name="contact_phone" type="tel" autoComplete="tel" placeholder="Optional" className="mt-1" />
+        </div>
+        <div>
           <Label>Contact email</Label>
           <Input name="contact_email" type="email" required className="mt-1" />
         </div>

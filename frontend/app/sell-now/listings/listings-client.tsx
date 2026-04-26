@@ -47,6 +47,7 @@ export function ListingsClient() {
       location_state: fd.get("location_state"),
       cost_tier: fd.get("cost_tier"),
       availability_text: fd.get("availability_text"),
+      contact_phone: (fd.get("contact_phone") as string)?.trim() || null,
       contact_email: fd.get("contact_email"),
       description: fd.get("description") || null,
       hcaptcha_token: null as string | null,
@@ -133,6 +134,10 @@ export function ListingsClient() {
           <div>
             <Label>Availability</Label>
             <Textarea name="availability_text" required className="mt-1" />
+          </div>
+          <div>
+            <Label>Contact phone</Label>
+            <Input name="contact_phone" type="tel" autoComplete="tel" placeholder="Optional" className="mt-1" />
           </div>
           <div>
             <Label>Contact email</Label>
