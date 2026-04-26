@@ -1,79 +1,97 @@
 # Railway deployment
 
-Railway builds with **[Railpack](https://railpack.com/)** by default. This repo pins runtimes via `railpack.json` plus `backend/.python-version` and `frontend/package.json` (`engines` / `packageManager`).
+Railway can run this repo in two ways:
 
-## One-time project setup (checklist)
+1. **All-in-one (least setup)** — deploy the **repository root** as a single service. Railway uses the root [`Dockerfile`](../Dockerfile) and root [`railway.json`](../railway.json) (Docker builder). No **Root directory**, no Railpack language detection, no split services. You still add **Postgres** and set variables (below).
+2. **Split stack (recommended at scale)** — two services: **`api`** with root `backend/`, **`web`** with root `frontend/`, each using Railpack or the existing per-folder `railway.json`. Set **Config as code** paths from the repo root: `/backend/railway.json` and `/frontend/railway.json` so Railway does not accidentally use the root `railway.json`.
 
-Do these in order so **install, build, start, and healthchecks** all line up with the repo.
+---
 
-### 1. Postgres
+## Option 1 — Single service (all-in-one)
 
-- Add the **Postgres** plugin.
-- Copy `DATABASE_URL` into the **`api`** service variables (see below). Convert the scheme for async SQLAlchemy if needed.
+### Create project
 
-### 2. Service `api` (FastAPI)
+1. **New project** → **Deploy from GitHub** → select this repo (leave **Root directory** empty).
+2. Add the **Postgres** plugin and reference `DATABASE_URL` on the same service (or paste the async URL).
 
-| Setting | Value |
-|--------|--------|
-| **Root directory** | `backend/` |
-| **Config as code** | Path from **repository root**: `/backend/railway.json` |
+Railway will build with **Dockerfile** and start nginx on **`$PORT`**, which proxies:
 
-For an [isolated monorepo](https://docs.railway.com/deployments/monorepo), Railway’s config file **does not** follow “Root directory”; if you skip this, deploy/start/healthcheck from `railway.json` may not apply.
+- `/api/v1/*`, `/static/*`, `/docs`, `/openapi.json`, `/redoc` → FastAPI on `127.0.0.1:8000`
+- everything else → Next.js standalone on `127.0.0.1:3000`
 
-**Variables (minimum):**
+### Variables (minimum)
 
-- `DATABASE_URL` — use `postgresql+asyncpg://...` (not raw `postgres://` unless you convert).
-- `SECRET_KEY` — long random string.
-- `ADMIN_BOOTSTRAP_TOKEN` — used only for the first admin bootstrap endpoint.
-- `BACKEND_CORS_ORIGINS` — comma-separated origins of the **web** app (e.g. `https://your-web.up.railway.app`).
+| Variable | Notes |
+|----------|--------|
+| `DATABASE_URL` | Use `postgresql+asyncpg://...` (convert from `postgres://` if needed). |
+| `SECRET_KEY` | Long random string. |
+| `ADMIN_BOOTSTRAP_TOKEN` | First admin bootstrap only. |
+| `BACKEND_CORS_ORIGINS` | Your public `https://…` origin (e.g. Railway public domain). |
+| `NEXT_PUBLIC_SITE_URL` | Same public `https://…` (set for **build** and **runtime** if you change domains). |
 
-Optional: `STRIPE_*`, `S3_*` / R2, `HCAPTCHA_SECRET`, `CRON_SECRET`, etc.
+### Build-time (Docker / Next)
 
-**What Railpack does:** installs Python **3.12** (from `railpack.json` / `.python-version`), installs the package from `pyproject.toml`, runs the detected build step, then starts with **`deploy.startCommand`** from `railway.json`: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`. A root **`main.py`** shim also allows `uvicorn main:app` if Railway ever uses Railpack’s FastAPI default.
+The image sets `NEXT_PUBLIC_API_URL=same` so the browser talks to the API on the **same host** (nginx routes `/api/v1` to FastAPI). No separate API public URL is required.
 
-**Healthcheck:** `/api/v1/health` (already in `railway.json`).
+Optional: override Dockerfile build args in Railway if you need a specific site URL baked into the client bundle:
 
-**Watch paths:** `railway.json` includes `watchPatterns` so only `backend/**` changes trigger an `api` rebuild (patterns are from repo root `/`).
+- `NEXT_PUBLIC_SITE_URL` (defaults to a placeholder in the Dockerfile; set to your real `https://…` for production metadata).
 
-### 3. Service `web` (Next.js)
+### After first deploy
 
-| Setting | Value |
-|--------|--------|
-| **Root directory** | `frontend/` |
-| **Config as code** | `/frontend/railway.json` |
+**Migrations** (from your machine, with the CLI linked to this all-in-one service):
 
-**Variables (minimum):**
+```bash
+railway run sh -c 'cd /app/backend && alembic upgrade head'
+```
 
-- `NEXT_PUBLIC_API_URL` — public URL of `api` (e.g. `https://api-production-xxxx.up.railway.app`).
-- `API_INTERNAL_URL` — same as above unless you use private networking between services.
-- `NEXT_PUBLIC_SITE_URL` — public URL of **this** web service (sitemap / OG).
+The running image keeps Alembic and `alembic.ini` under `/app/backend`.
 
-**What Railpack does:** enables **pnpm** via `packageManager`, installs deps, runs **`pnpm run build`** (standard `next build`), starts with **`pnpm start`** → `next start` on `$PORT`.
+**Bootstrap admin** — same as split deploy, using your public `https://` base URL.
 
-**Healthcheck:** `/` (in `railway.json`).
+---
 
-**Watch paths:** `/frontend/**` in `railway.json`.
+## Option 2 — Split `api` + `web`
 
-### 4. Link services
+### Per-service settings
 
-- Attach the Postgres plugin to **`api`** (or set `DATABASE_URL` from the plugin reference).
-- Ensure **`web`** can reach **`api`** using the URLs you put in the env vars above.
+| Service | Root directory | Config as code (repo-root path) |
+|---------|----------------|----------------------------------|
+| `api` | `backend/` | `/backend/railway.json` |
+| `web` | `frontend/` | `/frontend/railway.json` |
 
-## Async DB URL
+For an [isolated monorepo](https://docs.railway.com/deployments/monorepo), the config file path is from the **repository root**, not from the service root.
+
+### `api` variables
+
+- `DATABASE_URL` — `postgresql+asyncpg://...`
+- `SECRET_KEY`, `ADMIN_BOOTSTRAP_TOKEN`, `BACKEND_CORS_ORIGINS` (comma-separated web origins)
+- Optional: `STRIPE_*`, `S3_*`, `HCAPTCHA_SECRET`, `CRON_SECRET`
+
+### `web` variables
+
+- `NEXT_PUBLIC_API_URL` — public URL of the `api` service
+- `API_INTERNAL_URL` — same unless you use private networking
+- `NEXT_PUBLIC_SITE_URL` — public URL of the `web` service
+
+### Async DB URL
 
 If Railway provides `postgres://user:pass@host:port/db`, convert to:
 
 `postgresql+asyncpg://user:pass@host:port/db`
 
-## After first successful deploy
+### Healthchecks
 
-**Migrations:**
+- Split: `api` → `/api/v1/health`, `web` → `/`
+- All-in-one: `/` (root `railway.json`)
+
+### Migrations (split)
 
 ```bash
 railway run --service api alembic upgrade head
 ```
 
-**Bootstrap admin:**
+### Bootstrap admin (split)
 
 ```bash
 curl -X POST "$API_URL/api/v1/admin/seed-first-user" \
@@ -84,22 +102,27 @@ curl -X POST "$API_URL/api/v1/admin/seed-first-user" \
 
 Then sign in at `https://your-web-url/admin/login`.
 
-**Weekly featured vendor cron:** add a Railway cron hitting:
+### Weekly featured vendor cron
 
 `POST /api/v1/internal/cron/rotate-featured` with header `X-Cron-Secret: $CRON_SECRET`.
 
-## Optional overrides
+---
 
-- **Build command** (service settings): only if Railpack’s default is wrong; Railway runs it after tool install.
-- **Railpack env vars:** see [Railpack environment variables](https://railpack.com/config/environment-variables) (e.g. `RAILPACK_INSTALL_COMMAND`, `RAILPACK_PYTHON_VERSION`).
-- **`RAILPACK_CONFIG_FILE`:** path relative to the service root if you relocate `railpack.json`.
-
-## Files in this repo
+## Repo layout reference
 
 | Path | Role |
 |------|------|
-| `backend/railway.json` | `RAILPACK` builder, watch patterns, start command, healthcheck |
-| `frontend/railway.json` | Same for the web app |
-| `backend/railpack.json` | Pin Python **3.12** for Mise/Railpack |
-| `frontend/railpack.json` | Pin Node **22** |
-| `backend/.python-version` | Mise-compatible Python pin (backup) |
+| `/railway.json` | All-in-one: Docker build + deploy healthcheck |
+| `/Dockerfile` | All-in-one image |
+| `/deploy/railway/` | nginx template + entrypoint for all-in-one |
+| `backend/railway.json` | Split API: Railpack + start command |
+| `frontend/railway.json` | Split web: Railpack + start command |
+| `backend/railpack.json` / `frontend/railpack.json` | Runtime pins when using Railpack |
+
+---
+
+## Optional overrides
+
+- **Build command** (service settings): only if the default is wrong; Railway runs it after tool install.
+- **Railpack:** [environment variables](https://railpack.com/config/environment-variables)
+- **`RAILPACK_CONFIG_FILE`:** path relative to the service root if you relocate `railpack.json`.

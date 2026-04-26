@@ -35,16 +35,11 @@ make dev
 
 ## Railway
 
-Deploy two services from this repo (Railway uses **Railpack**; both `railway.json` files set `"builder": "RAILPACK"` and repo-root **watch patterns**):
+**Fastest path (one service):** connect the GitHub repo with **Root directory** left empty. Railway builds the root [`Dockerfile`](Dockerfile) (see [`railway.json`](railway.json)): nginx on `$PORT`, Next.js + FastAPI behind it. Add Postgres and set `DATABASE_URL`, `SECRET_KEY`, `ADMIN_BOOTSTRAP_TOKEN`, `BACKEND_CORS_ORIGINS`, and `NEXT_PUBLIC_SITE_URL` as in [docs/RAILWAY.md](docs/RAILWAY.md).
 
-1. **api** — Root directory `backend/`. In service settings, set **config as code** to `/backend/railway.json` (paths are from the repo root). Start command and healthcheck live in that file.
-2. **web** — Root directory `frontend/`. Config as code: `/frontend/railway.json`.
+**Split path (api + web):** two services — `api` with root `backend/` and config `/backend/railway.json`, `web` with root `frontend/` and config `/frontend/railway.json` (paths from repo root). Uses **Railpack** plus `backend/railpack.json` / `frontend/railpack.json` for runtime pins. Set `NEXT_PUBLIC_API_URL` to the API’s public URL and `BACKEND_CORS_ORIGINS` to the web origin.
 
-Runtime pins: `backend/railpack.json` (Python 3.12), `frontend/railpack.json` (Node 22).
-
-Set `DATABASE_URL` on the API service, `NEXT_PUBLIC_API_URL` on the web service, and `BACKEND_CORS_ORIGINS` to your web origin.
-
-See [docs/RAILWAY.md](docs/RAILWAY.md) for the full checklist.
+Details, env tables, migrations, and bootstrap: [docs/RAILWAY.md](docs/RAILWAY.md).
 
 ## Bootstrap admin
 

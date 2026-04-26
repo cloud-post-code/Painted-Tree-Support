@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-
-const backend = () => process.env.API_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import { internalBackendUrl } from "@/lib/api";
 
 export async function POST(req: Request) {
   const body = await req.json();
-  const r = await fetch(`${backend()}/api/v1/admin/login`, {
+  const r = await fetch(`${internalBackendUrl()}/api/v1/admin/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),

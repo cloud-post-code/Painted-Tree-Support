@@ -2,7 +2,7 @@ import Link from "next/link";
 import { MdBody } from "@/components/md-body";
 import { LegalStrip } from "@/components/legal-strip";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { apiGet } from "@/lib/api";
+import { apiGet, apiUrl } from "@/lib/api";
 import { TriageProgress } from "./triage-progress";
 import { DownloadPdf } from "./download-pdf";
 
@@ -29,7 +29,7 @@ export default async function ImmediateHelpPage() {
   } catch {
     /* empty */
   }
-  const pdf = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/static/checklists/inventory-recovery-checklist.pdf`;
+  const pdf = apiUrl("/static/checklists/inventory-recovery-checklist.pdf");
   const discord = settings.discord_channel_general || settings.discord_invite_url || "#";
 
   return (

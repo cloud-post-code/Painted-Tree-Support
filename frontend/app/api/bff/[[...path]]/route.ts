@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-
-const backend = () => process.env.API_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import { internalBackendUrl } from "@/lib/api";
 
 async function proxy(req: NextRequest, segments: string[]) {
   const path = "/api/" + segments.join("/");
-  const url = `${backend()}${path}`;
+  const url = `${internalBackendUrl()}${path}`;
   const token = req.cookies.get("access_token")?.value;
   const headers: HeadersInit = {};
   if (token) {
