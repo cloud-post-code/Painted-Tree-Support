@@ -79,7 +79,7 @@ export function ListingsClient() {
       setMsg(data.detail || "Error");
       return;
     }
-    trackEvent("listing_submit", { id: data.id });
+    trackEvent("listing_submit", data.id != null ? { id: data.id } : {});
     setMsg("Submitted — pending review. Thank you.");
     form.reset();
   }

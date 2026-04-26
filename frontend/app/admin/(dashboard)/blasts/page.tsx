@@ -145,23 +145,21 @@ export default function AdminBlastsPage() {
             {AUDIENCE_OPTIONS.map((o) => (
               <label
                 key={o.value}
-                htmlFor={`audience_${o.value}`}
                 className={`flex cursor-pointer items-start gap-2 rounded-md border p-2 text-sm ${
                   audience === o.value ? "border-[var(--vrr-teal)] bg-[var(--vrr-teal)]/5" : "border-black/10"
                 }`}
               >
                 <input
-                  id={`audience_${o.value}`}
                   type="radio"
                   name="audience"
                   value={o.value}
                   checked={audience === o.value}
                   onChange={() => setAudience(o.value)}
-                  className="mt-0.5"
+                  className="mt-0.5 shrink-0"
                 />
-                <span>
-                  <span className="font-medium">{o.label}</span>
-                  <span className="block text-xs text-black/60">{o.hint}</span>
+                <span className="min-w-0 font-medium">
+                  {o.label}
+                  <span className="mt-0.5 block text-xs font-normal text-black/60">{o.hint}</span>
                 </span>
               </label>
             ))}
