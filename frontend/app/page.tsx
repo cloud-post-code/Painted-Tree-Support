@@ -33,10 +33,10 @@ export default async function HomePage() {
         <div className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-12 sm:px-6 lg:flex-row lg:items-center lg:py-16">
           <div className="flex-1 space-y-4">
             <p className="text-sm font-medium italic tracking-tight text-[var(--vrr-teal)]">
-              April showers bring May flowers.
+              Lost your booth? Start here.
             </p>
             <h1 className="text-3xl font-bold tracking-tight text-[var(--vrr-ink)] sm:text-4xl xl:text-5xl">
-              Lost your booth? Start here.
+              April showers bring May flowers.
             </h1>
             <p className="max-w-xl text-lg leading-relaxed text-black/70">
               One place for emergency steps, selling again, and community — so you can act today, not weeks from now.
