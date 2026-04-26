@@ -1,7 +1,7 @@
 import secrets
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +11,7 @@ from app.db.session import get_db
 from app.limiter import limiter
 from app.models.vendor import Vendor
 from app.services.captcha import verify_hcaptcha
+from app.services.vendor_images import allowed_vendor_asset_url, process_vendor_image, save_vendor_jpeg
 
 router = APIRouter(prefix="/vendors", tags=["vendors"])
 
@@ -29,6 +30,8 @@ class VendorCreate(BaseModel):
     state: str = Field(max_length=8)
     bio_150: str = Field(max_length=160)
     shop_links: list[ShopLink] = Field(default_factory=list, max_length=4)
+    logo_url: str | None = Field(None, max_length=2048)
+    banner_url: str | None = Field(None, max_length=2048)
     submitted_email: EmailStr
     hcaptcha_token: str | None = None
 
@@ -97,6 +100,41 @@ def _vendor_public(v: Vendor) -> dict:
     }
 
 
+def _validated_asset_url(url: str | None) -> str | None:
+    if not url or not str(url).strip():
+        return None
+    u = str(url).strip()[:2048]
+    if not allowed_vendor_asset_url(u):
+        raise HTTPException(status_code=400, detail="Invalid image URL — use the upload buttons for logo and banner.")
+    return u
+
+
+@router.post("/upload-image")
+@limiter.limit("20/minute")
+async def upload_vendor_image(
+    request: Request,
+    kind: str = Form(...),
+    file: UploadFile = File(...),
+) -> dict:
+    _ = request
+    if kind not in ("logo", "banner"):
+        raise HTTPException(status_code=400, detail="kind must be logo or banner")
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Empty file")
+    try:
+        jpeg = process_vendor_image(raw, kind)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except OSError as e:
+        raise HTTPException(status_code=400, detail="Could not read image") from e
+    try:
+        url = save_vendor_jpeg(jpeg)
+    except OSError as e:
+        raise HTTPException(status_code=500, detail="Could not store image") from e
+    return {"url": url}
+
+
 @router.get("/{vendor_id}")
 async def get_vendor(vendor_id: int, db: AsyncSession = Depends(get_db)) -> dict:
     v = (
@@ -117,6 +155,8 @@ async def create_vendor(request: Request, body: VendorCreate, db: AsyncSession =
     if not await verify_hcaptcha(body.hcaptcha_token, request.client.host if request.client else None):
         raise HTTPException(status_code=400, detail="Captcha failed")
     links = [x.model_dump() for x in body.shop_links][:4]
+    logo = _validated_asset_url(body.logo_url)
+    banner = _validated_asset_url(body.banner_url)
     row = Vendor(
         brand_name=body.brand_name,
         category=body.category,
@@ -124,6 +164,8 @@ async def create_vendor(request: Request, body: VendorCreate, db: AsyncSession =
         state=body.state,
         bio_150=body.bio_150,
         shop_links=links,
+        logo_url=logo,
+        banner_url=banner,
         submitted_email=str(body.submitted_email),
         status="pending",
     )

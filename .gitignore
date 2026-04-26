@@ -37,6 +37,9 @@ htmlcov/
 playwright-report/
 test-results/
 
+# Vendor uploads (local disk)
+backend/static/uploads/
+
 # Misc
 *.log
 .turbo
