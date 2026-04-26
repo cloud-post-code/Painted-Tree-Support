@@ -87,7 +87,7 @@ If Railway provides `postgres://user:pass@host:port/db`, convert to:
 ### Healthchecks
 
 - Split: `api` → `/api/v1/health`, `web` → `/`
-- All-in-one: `/` (root `railway.json`)
+- All-in-one (root `railway.json`): `/api/v1/health` — **liveness only** (no DB call), so the container can pass Railway while Postgres is still attaching. Use **`GET /api/v1/health/ready`** to verify Postgres (returns **503** if the DB is down).
 
 ### Migrations (split)
 

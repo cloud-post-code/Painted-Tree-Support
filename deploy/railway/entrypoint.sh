@@ -13,9 +13,29 @@ if ! sh scripts/migrate_retry.sh; then
 fi
 echo "railway: starting uvicorn…" >&2
 python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8000 &
+UVICORN_PID=$!
 sleep 1
-if ! kill -0 "$!" 2>/dev/null; then
+if ! kill -0 "$UVICORN_PID" 2>/dev/null; then
   echo "railway: uvicorn exited immediately after start" >&2
+  exit 1
+fi
+
+echo "railway: waiting for API liveness (/api/v1/health)…" >&2
+i=0
+while [ "$i" -lt 90 ]; do
+  if curl -sf "http://127.0.0.1:8000/api/v1/health" >/dev/null 2>&1; then
+    echo "railway: API is responding" >&2
+    break
+  fi
+  if ! kill -0 "$UVICORN_PID" 2>/dev/null; then
+    echo "railway: uvicorn died while waiting for health" >&2
+    exit 1
+  fi
+  i=$((i + 1))
+  sleep 1
+done
+if [ "$i" -eq 90 ]; then
+  echo "railway: timed out waiting for http://127.0.0.1:8000/api/v1/health (90s)" >&2
   exit 1
 fi
 
