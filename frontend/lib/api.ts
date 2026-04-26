@@ -17,14 +17,6 @@ export function internalBackendUrl(): string {
 }
 
 /** Public API / static asset base for fetch() and hrefs. */
-/** Use for vendor (or other) media stored as `/static/...` on the API host. */
-export function resolveMediaUrl(pathOrUrl: string | null | undefined): string | null {
-  if (!pathOrUrl) return null;
-  if (pathOrUrl.startsWith("http://") || pathOrUrl.startsWith("https://")) return pathOrUrl;
-  const p = pathOrUrl.startsWith("/") ? pathOrUrl : `/${pathOrUrl}`;
-  return apiUrl(p);
-}
-
 export function apiUrl(path: string): string {
   const p = path.startsWith("/") ? path : `/${path}`;
   if (typeof window === "undefined") {
@@ -41,6 +33,14 @@ export function apiUrl(path: string): string {
     return p;
   }
   return `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}${p}`;
+}
+
+/** Use for vendor (or other) media stored as `/static/...` on the API host. */
+export function resolveMediaUrl(pathOrUrl: string | null | undefined): string | null {
+  if (!pathOrUrl) return null;
+  if (pathOrUrl.startsWith("http://") || pathOrUrl.startsWith("https://")) return pathOrUrl;
+  const p = pathOrUrl.startsWith("/") ? pathOrUrl : `/${pathOrUrl}`;
+  return apiUrl(p);
 }
 
 export async function apiGet<T>(path: string, init?: RequestInit): Promise<T> {

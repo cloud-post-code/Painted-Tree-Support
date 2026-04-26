@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { VendorShopLinks } from "@/components/vendor-shop-links";
-import { apiGetNoStore } from "@/lib/api";
+import { apiGetNoStore, resolveMediaUrl } from "@/lib/api";
 
 type Vendor = {
   id: number;
@@ -58,7 +58,7 @@ export default async function VendorProfile({ params }: { params: Promise<{ id: 
       {v.banner_url ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={v.banner_url}
+          src={resolveMediaUrl(v.banner_url) || ""}
           alt=""
           className="mt-4 w-full max-h-72 rounded-xl border border-black/10 object-cover object-center"
           loading="lazy"
@@ -69,7 +69,7 @@ export default async function VendorProfile({ params }: { params: Promise<{ id: 
         {v.logo_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={v.logo_url}
+            src={resolveMediaUrl(v.logo_url) || ""}
             alt=""
             className="size-24 shrink-0 rounded-xl border border-black/10 object-cover"
             loading="lazy"

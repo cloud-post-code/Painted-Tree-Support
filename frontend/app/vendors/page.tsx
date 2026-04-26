@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, resolveMediaUrl } from "@/lib/api";
 
 type Vendor = {
   id: number;
@@ -99,7 +99,7 @@ export default function VendorsPage() {
               <div className="aspect-[2/1] w-full bg-black/[0.04]">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={v.banner_url}
+                  src={resolveMediaUrl(v.banner_url) || ""}
                   alt=""
                   className="h-full w-full object-cover object-center"
                   loading="lazy"
@@ -112,7 +112,7 @@ export default function VendorsPage() {
                 {v.logo_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={v.logo_url}
+                    src={resolveMediaUrl(v.logo_url) || ""}
                     alt=""
                     className="mt-0.5 size-14 shrink-0 rounded-lg border border-black/10 object-cover"
                     loading="lazy"

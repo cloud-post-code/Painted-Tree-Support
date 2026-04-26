@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { VendorImageUpload } from "@/components/vendor-image-upload";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +20,8 @@ const CATEGORIES: { value: string; label: string }[] = [
 
 export default function VendorSubmitPage() {
   const [msg, setMsg] = useState("");
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [bannerUrl, setBannerUrl] = useState<string | null>(null);
   return (
     <div className="mx-auto max-w-xl px-4 py-10 sm:px-6">
       <h1 className="text-2xl font-bold">Submit your vendor profile</h1>
@@ -43,6 +46,8 @@ export default function VendorSubmitPage() {
             state: fd.get("state"),
             bio_150: fd.get("bio_150"),
             shop_links,
+            logo_url: logoUrl,
+            banner_url: bannerUrl,
             submitted_email: fd.get("submitted_email"),
             hcaptcha_token: null,
           };
@@ -83,6 +88,11 @@ export default function VendorSubmitPage() {
           <Label htmlFor="bio_150">Short bio (directory listing, max 160 characters)</Label>
           <Textarea id="bio_150" name="bio_150" maxLength={160} required className="mt-1" rows={3} />
           <p className="mt-1 text-xs text-black/50">Shown on your public card; a longer description can be added after approval.</p>
+        </div>
+        <div className="rounded-lg border border-black/10 bg-black/[0.02] p-4 space-y-6">
+          <p className="text-sm font-medium text-black/80">Images (optional)</p>
+          <VendorImageUpload kind="logo" value={logoUrl} onChange={setLogoUrl} />
+          <VendorImageUpload kind="banner" value={bannerUrl} onChange={setBannerUrl} />
         </div>
         <div>
           <Label htmlFor="submitted_email">Your email (for updates)</Label>
