@@ -19,11 +19,14 @@ from app.models import (
     LegalOrg,
     Listing,
     Resource,
+    ServiceOffer,
     SiteCounter,
     SiteSetting,
+    SpaceOffer,
     Template,
     TriageStep,
     Vendor,
+    Volunteer,
 )
 
 
@@ -65,20 +68,96 @@ async def main() -> None:
                 )
             )
 
-        grant_titles = [
-            ("Small Business Emergency Grant", "CA"),
-            ("Downtown Recovery Fund", "NY"),
-            ("Market Vendor Relief", None),
-            ("Microenterprise Bridge Grant", "TX"),
-            ("Food Vendor Safety Net", None),
-            ("Arts & Crafts Stabilization", "OR"),
-            ("Neighborhood Market Fund", "IL"),
-            ("Pop-up Recovery Stipend", "FL"),
-            ("Vendor Fee Waiver Pool", "WA"),
-            ("Community Commerce Grant", "CO"),
-            ("Winter Market Support", "MN"),
+        grant_rows: list[tuple[str, str | None, str, str]] = [
+            (
+                "Small Business Emergency Grant",
+                "CA",
+                (
+                    "One-time awards for microbusinesses with a storefront or booth history; "
+                    "funds may cover inventory, rent, or equipment."
+                ),
+                (
+                    "California-based sole props and LLCs under $500K annual revenue; "
+                    "documentation of business closure or relocation."
+                ),
+            ),
+            (
+                "Downtown Recovery Fund",
+                "NY",
+                (
+                    "Neighborhood grants for retailers and food vendors affected by construction, "
+                    "vacancy, or disaster-related displacement."
+                ),
+                "NYC metro vendors with a lease or market stall agreement in the last 12 months.",
+            ),
+            (
+                "Market Vendor Relief",
+                None,
+                (
+                    "National pilot program (demo link) for open-air and indoor market sellers who "
+                    "lost their stall assignment without notice."
+                ),
+                "Active sellers in any U.S. state with proof of prior market participation.",
+            ),
+            (
+                "Microenterprise Bridge Grant",
+                "TX",
+                (
+                    "Fast micro-grants for businesses with five or fewer employees bridging to a new "
+                    "sales channel or location."
+                ),
+                "Texas-based microenterprises; priority for food, apparel, and handmade goods vendors.",
+            ),
+            (
+                "Food Vendor Safety Net",
+                None,
+                (
+                    "Reimbursement-style support for permitted food vendors for spoilage, permits, "
+                    "and commissary transitions after closure."
+                ),
+                "Mobile and fixed food vendors with current or lapsed health permits in the last 18 months.",
+            ),
+            (
+                "Arts & Crafts Stabilization",
+                "OR",
+                "Stipends for artists and makers to rebuild online presence, photography, and shipping workflows.",
+                "Oregon residents selling original handmade work; portfolio or marketplace history accepted.",
+            ),
+            (
+                "Neighborhood Market Fund",
+                "IL",
+                "Community-funded matching grants for vendors returning to pop-ups and farmers markets within 90 days.",
+                "Illinois vendors referred by a market manager or BIA letter.",
+            ),
+            (
+                "Pop-up Recovery Stipend",
+                "FL",
+                (
+                    "Small stipends for booth fees, tents, and signage for vendors restarting at "
+                    "festivals or parking-lot markets."
+                ),
+                "Florida vendors with a confirmed pop-up or event date.",
+            ),
+            (
+                "Vendor Fee Waiver Pool",
+                "WA",
+                "Covers application and first-month fees at partner markets and co-retail spaces (demo program).",
+                "Washington vendors displaced from a closed venue in the prior six months.",
+            ),
+            (
+                "Community Commerce Grant",
+                "CO",
+                "Grants for vendors partnering with local nonprofits on bundled giveaways or mutual-aid pop-ups.",
+                "Colorado small businesses with a community partner letter of support.",
+            ),
+            (
+                "Winter Market Support",
+                "MN",
+                "Cold-weather market transition grants for heaters, tent upgrades, and indoor winter series fees.",
+                "Minnesota outdoor market vendors with winter series acceptance or waitlist.",
+            ),
         ]
-        for i, (title, st) in enumerate(grant_titles):
+        for i, (title, st, summary, eligibility) in enumerate(grant_rows):
             exists = (
                 await db.execute(select(Resource).where(Resource.title == title, Resource.category == "grant"))
             ).scalar_one_or_none()
@@ -87,13 +166,13 @@ async def main() -> None:
             db.add(
                 Resource(
                     title=title,
-                    summary="Short description — replace with verified copy.",
+                    summary=summary,
                     url=f"https://example.org/grants/{i}",
                     category="grant",
                     state=st,
                     published=True,
                     sort_order=i,
-                    eligibility_summary="Small vendors displaced from physical markets.",
+                    eligibility_summary=eligibility,
                     application_url=f"https://example.org/grants/{i}/apply",
                 )
             )
@@ -345,18 +424,197 @@ async def main() -> None:
                 )
             )
 
-        if not (await db.execute(select(Listing).limit(1))).scalar_one_or_none():
+        listing_seeds: list[tuple[str, str, str, str, str, str, str, str | None]] = [
+            (
+                "booth_offer",
+                "Riverside Weekend Market",
+                "Austin",
+                "TX",
+                "reduced",
+                "Two 10x10 spots opening June",
+                "ops@example.org",
+                None,
+            ),
+            (
+                "booth_offer",
+                "Harborview Night Market",
+                "Seattle",
+                "WA",
+                "market",
+                "Four covered bays on Friday evenings; power available.",
+                "harborview@example.org",
+                "206-555-0100",
+            ),
+            (
+                "booth_offer",
+                "Midtown Makers Hall",
+                "Chicago",
+                "IL",
+                "reduced",
+                "Shared retail wall + weekend table bundle for jewelry and small goods.",
+                "makershall@example.org",
+                None,
+            ),
+            (
+                "vendor_seeking",
+                "Bloom & Thread",
+                "Denver",
+                "CO",
+                "reduced",
+                "Jewelry vendor seeking 8x8 or shared case near LoDo; available Tue–Sun.",
+                "hello@example.org",
+                None,
+            ),
+            (
+                "vendor_seeking",
+                "Spice Route Pop-Up",
+                "Miami",
+                "FL",
+                "free",
+                "Packaged food vendor needs covered weekend spot; has all permits.",
+                "spiceroute@example.org",
+                None,
+            ),
+        ]
+        for typ, name, city, st, tier, avail, email, phone in listing_seeds:
+            exists = (
+                await db.execute(
+                    select(Listing).where(
+                        Listing.type == typ,
+                        Listing.brand_or_space_name == name,
+                        Listing.location_city == city,
+                    )
+                )
+            ).scalar_one_or_none()
+            if exists:
+                continue
             db.add(
                 Listing(
-                    type="booth_offer",
-                    brand_or_space_name="Riverside Weekend Market",
-                    location_city="Austin",
-                    location_state="TX",
-                    cost_tier="reduced",
-                    availability_text="Two 10x10 spots opening June",
-                    contact_email="ops@example.org",
+                    type=typ,
+                    brand_or_space_name=name,
+                    location_city=city,
+                    location_state=st,
+                    cost_tier=tier,
+                    availability_text=avail,
+                    contact_email=email,
+                    contact_phone=phone,
                     status="published",
                 )
+            )
+
+        if not (await db.execute(select(SpaceOffer).limit(1))).scalar_one_or_none():
+            db.add_all(
+                [
+                    SpaceOffer(
+                        space_type="Indoor retail bay (10x10)",
+                        location_city="Portland",
+                        location_state="OR",
+                        cost_tier="reduced",
+                        availability_text=(
+                            "Two bays free for first month for displaced market vendors; "
+                            "rolling through fall."
+                        ),
+                        contact_email="spaces@example.org",
+                        contact_phone="503-555-0142",
+                        description="Shared loading dock and Wi‑Fi. Quiet hours before 10 a.m.",
+                        status="published",
+                        published_ack=True,
+                    ),
+                    SpaceOffer(
+                        space_type="Parking-lot pop-up stall",
+                        location_city="Phoenix",
+                        location_state="AZ",
+                        cost_tier="free",
+                        availability_text="Sundays 9–2; shade structures provided.",
+                        contact_email="events@example.org",
+                        description="First-come setup from 7 a.m.; generator use restricted.",
+                        status="published",
+                        published_ack=True,
+                    ),
+                    SpaceOffer(
+                        space_type="Co-op shelf + weekend table",
+                        location_city="Minneapolis",
+                        location_state="MN",
+                        cost_tier="market",
+                        availability_text="Waitlist for January; priority for handmade and pantry goods.",
+                        contact_email="coop@example.org",
+                        status="pending",
+                        published_ack=False,
+                    ),
+                ]
+            )
+
+        if not (await db.execute(select(ServiceOffer).limit(1))).scalar_one_or_none():
+            db.add_all(
+                [
+                    ServiceOffer(
+                        service_type="legal",
+                        availability="Pro bono clinics first Tuesday monthly; remote consults within 5 business days.",
+                        cost_tier="pro_bono",
+                        contact_email="legalclinic@example.org",
+                        contact_phone="415-555-0199",
+                        description="Contract review, lease questions, and creditor timelines for small vendors.",
+                        status="published",
+                        published_ack=True,
+                    ),
+                    ServiceOffer(
+                        service_type="marketing",
+                        availability="10 hours/month for three months; async Slack.",
+                        cost_tier="reduced",
+                        contact_email="studio@example.org",
+                        description="Listing copy, basic photo edits, and one landing page for relaunch.",
+                        status="published",
+                        published_ack=True,
+                    ),
+                    ServiceOffer(
+                        service_type="logistics",
+                        availability="Regional pickup within 50 miles Wed/Sat.",
+                        cost_tier="paid",
+                        contact_email="haul@example.org",
+                        description="Inventory moves from closed booths to storage or new venues.",
+                        status="published",
+                        published_ack=True,
+                    ),
+                    ServiceOffer(
+                        service_type="tech",
+                        availability="Evenings PT; Shopify/Etsy setup sprints.",
+                        cost_tier="reduced",
+                        contact_email="build@example.org",
+                        description="Payments, shipping profiles, and DNS for simple storefronts.",
+                        status="pending",
+                        published_ack=False,
+                    ),
+                ]
+            )
+
+        if not (await db.execute(select(Volunteer).limit(1))).scalar_one_or_none():
+            db.add_all(
+                [
+                    Volunteer(
+                        name="Jordan Lee",
+                        email="jordan.volunteer@example.com",
+                        skills=["copywriting", "social media"],
+                        availability="Weeknights after 6 p.m. ET",
+                        areas_of_interest="Helping vendors rewrite bios and announcement posts",
+                        status="published",
+                    ),
+                    Volunteer(
+                        name="Sam Rivera",
+                        email="sam.volunteer@example.com",
+                        skills=["photography", "lightroom"],
+                        availability="Saturdays in metro Denver",
+                        areas_of_interest="Product shots for Etsy relaunches",
+                        status="published",
+                    ),
+                    Volunteer(
+                        name="Avery Kim",
+                        email="avery.volunteer@example.com",
+                        skills=["spreadsheets", "quickbooks"],
+                        availability="Sunday afternoons",
+                        areas_of_interest="Inventory spreadsheets and simple P&L templates",
+                        status="pending",
+                    ),
+                ]
             )
 
         await db.commit()

@@ -19,6 +19,7 @@ cp frontend/.env.example frontend/.env.local
 # Set DATABASE_URL in backend/.env (e.g. postgresql+asyncpg://postgres:postgres@localhost:5432/vrr)
 # Start Postgres (e.g. docker compose up -d) then create tables:
 #   make db-migrate
+#   make seed-data   # optional demo content for local/staging
 
 make dev
 ```
@@ -33,6 +34,7 @@ make dev
 |------------------|--------------------------------------|
 | `make dev`       | Run API + web (requires two terminals or use `make dev-api` / `make dev-web`) |
 | `make db-migrate`| Apply Alembic migrations (Postgres must be up; required before admin works end-to-end) |
+| `make seed-data` | Idempotent demo rows: resources, vendors, listings, space/service offers, volunteers, legal, guides, etc. (`backend/scripts/seed_data.py`) |
 | `make seed-admin`| Create first admin from `ADMIN_SEED_EMAIL` / `ADMIN_SEED_PASSWORD` (or pass `--upsert` via script; see `backend/scripts/seed_admin.py`) |
 | `make lint`      | Lint backend (ruff) + frontend (eslint) |
 | `make test`      | pytest + vitest                      |

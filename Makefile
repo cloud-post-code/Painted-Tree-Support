@@ -1,4 +1,4 @@
-.PHONY: dev dev-api dev-web db-migrate seed-admin lint test install install-backend install-frontend
+.PHONY: dev dev-api dev-web db-migrate seed-admin seed-data lint test install install-backend install-frontend
 
 install: install-backend install-frontend
 
@@ -16,6 +16,9 @@ db-migrate:
 
 seed-admin:
 	cd backend && PYTHONPATH=. python3 scripts/seed_admin.py
+
+seed-data:
+	cd backend && PYTHONPATH=. python3 scripts/seed_data.py
 
 dev-api:
 	cd backend && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
