@@ -157,7 +157,7 @@ export default function AdminBlastsPage() {
                   onChange={() => setAudience(o.value)}
                   className="mt-0.5 shrink-0"
                 />
-                <span className="min-w-0 font-medium">
+                <span className="min-w-0 flex flex-col font-medium">
                   {o.label}
                   <span className="mt-0.5 block text-xs font-normal text-black/60">{o.hint}</span>
                 </span>
