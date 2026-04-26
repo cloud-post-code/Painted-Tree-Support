@@ -35,14 +35,16 @@ make dev
 
 ## Railway
 
-Deploy two services from this repo:
+Deploy two services from this repo (Railway uses **Railpack**; both `railway.json` files set `"builder": "RAILPACK"` and repo-root **watch patterns**):
 
-1. **api** — Root directory `backend/`, start `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-2. **web** — Root directory `frontend/`, build `pnpm install && pnpm build`, start `pnpm start`
+1. **api** — Root directory `backend/`. In service settings, set **config as code** to `/backend/railway.json` (paths are from the repo root). Start command and healthcheck live in that file.
+2. **web** — Root directory `frontend/`. Config as code: `/frontend/railway.json`.
+
+Runtime pins: `backend/railpack.json` (Python 3.12), `frontend/railpack.json` (Node 22).
 
 Set `DATABASE_URL` on the API service, `NEXT_PUBLIC_API_URL` on the web service, and `BACKEND_CORS_ORIGINS` to your web origin.
 
-See [docs/RAILWAY.md](docs/RAILWAY.md) and `backend/railway.json` / `frontend/railway.json`.
+See [docs/RAILWAY.md](docs/RAILWAY.md) for the full checklist.
 
 ## Bootstrap admin
 
