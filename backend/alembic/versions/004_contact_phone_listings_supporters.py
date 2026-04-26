@@ -12,6 +12,8 @@ import sqlalchemy as sa
 
 from alembic import op
 
+import migration_helpers as mh
+
 revision: str = "004_contact_phone"
 down_revision: str | None = "003_vendor_pt_ext"
 branch_labels: str | Sequence[str] | None = None
@@ -19,12 +21,18 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.add_column("listings", sa.Column("contact_phone", sa.String(length=64), nullable=True))
-    op.add_column("space_offers", sa.Column("contact_phone", sa.String(length=64), nullable=True))
-    op.add_column("service_offers", sa.Column("contact_phone", sa.String(length=64), nullable=True))
+    if not mh.column_exists("listings", "contact_phone"):
+        op.add_column("listings", sa.Column("contact_phone", sa.String(length=64), nullable=True))
+    if not mh.column_exists("space_offers", "contact_phone"):
+        op.add_column("space_offers", sa.Column("contact_phone", sa.String(length=64), nullable=True))
+    if not mh.column_exists("service_offers", "contact_phone"):
+        op.add_column("service_offers", sa.Column("contact_phone", sa.String(length=64), nullable=True))
 
 
 def downgrade() -> None:
-    op.drop_column("service_offers", "contact_phone")
-    op.drop_column("space_offers", "contact_phone")
-    op.drop_column("listings", "contact_phone")
+    if mh.column_exists("service_offers", "contact_phone"):
+        op.drop_column("service_offers", "contact_phone")
+    if mh.column_exists("space_offers", "contact_phone"):
+        op.drop_column("space_offers", "contact_phone")
+    if mh.column_exists("listings", "contact_phone"):
+        op.drop_column("listings", "contact_phone")
