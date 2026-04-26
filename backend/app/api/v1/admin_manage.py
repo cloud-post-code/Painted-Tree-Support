@@ -1,11 +1,12 @@
 import csv
 import io
+import secrets
 from datetime import date, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
@@ -427,6 +428,9 @@ async def admin_listings(
             "availability_text": r.availability_text,
             "contact_phone": r.contact_phone,
             "contact_email": r.contact_email,
+            "website_url": r.website_url,
+            "category": r.category,
+            "hero_image_url": r.hero_image_url,
             "description": r.description,
             "status": r.status,
             "created_at": r.created_at.isoformat() if r.created_at else None,
@@ -513,6 +517,13 @@ def _vendor_admin_summary(r: Vendor) -> dict:
         "category": r.category,
         "city": r.city,
         "state": r.state,
+        "address_line1": r.address_line1,
+        "address_line2": r.address_line2,
+        "postal_code": r.postal_code,
+        "phone": r.phone,
+        "fax": r.fax,
+        "contact_name": r.contact_name,
+        "contact_email": r.contact_email,
         "bio_150": r.bio_150,
         "shop_links": r.shop_links,
         "submitted_email": r.submitted_email,
@@ -546,6 +557,13 @@ class VendorAdminUpdate(BaseModel):
     category: str | None = Field(None, pattern="^(jewelry|food|clothing|art|beauty|home|other)$")
     city: str | None = Field(None, max_length=255)
     state: str | None = Field(None, max_length=8)
+    address_line1: str | None = Field(None, max_length=255)
+    address_line2: str | None = Field(None, max_length=255)
+    postal_code: str | None = Field(None, max_length=32)
+    phone: str | None = Field(None, max_length=64)
+    fax: str | None = Field(None, max_length=64)
+    contact_name: str | None = Field(None, max_length=255)
+    contact_email: str | None = Field(None, max_length=255)
     bio_150: str | None = Field(None, max_length=160)
     description_full: str | None = None
     logo_url: str | None = Field(None, max_length=2048)
@@ -587,8 +605,23 @@ async def admin_vendor_patch(
     data = body.model_dump(exclude_unset=True)
     if "shop_links" in data and data["shop_links"] is not None:
         data["shop_links"] = [dict(x) for x in data["shop_links"]][:4]
+    _clear_if_empty = (
+        "logo_url",
+        "banner_url",
+        "description_full",
+        "city",
+        "state",
+        "bio_150",
+        "address_line1",
+        "address_line2",
+        "postal_code",
+        "phone",
+        "fax",
+        "contact_name",
+        "contact_email",
+    )
     for k, v in data.items():
-        if v == "" and k in ("logo_url", "banner_url", "description_full"):
+        if v == "" and k in _clear_if_empty:
             v = None
         setattr(row, k, v)
     await db.commit()
@@ -614,6 +647,183 @@ async def admin_vendor_status(
         row.featured = featured
     await db.commit()
     return {"id": row.id, "status": row.status, "featured": row.featured}
+
+
+def _csv_row_norm(row: dict) -> dict[str, str]:
+    return {
+        (str(k or "").strip().lstrip("\ufeff").lower()): ("" if v is None else str(v).strip())
+        for k, v in row.items()
+        if k is not None
+    }
+
+
+def _vendor_csv_category(val: str) -> str:
+    allowed = frozenset({"jewelry", "food", "clothing", "art", "beauty", "home", "other"})
+    s = (val or "").strip().lower() or "other"
+    return s if s in allowed else "other"
+
+
+def _vendor_csv_pipe_list(val: str) -> list[str] | None:
+    if not val or not str(val).strip():
+        return None
+    parts = [x.strip() for x in str(val).replace("\n", "|").split("|") if x.strip()]
+    return parts or None
+
+
+def _vendor_csv_shop_links(nr: dict[str, str]) -> list[dict[str, str]]:
+    links: list[dict[str, str]] = []
+    u1 = nr.get("shop_url") or nr.get("website") or nr.get("shop_online_url") or ""
+    if u1:
+        lab = (nr.get("shop_url_label") or nr.get("shop_online_label") or "Shop online")[:64]
+        links.append({"label": lab, "url": u1[:2048]})
+    u2 = nr.get("shop_inperson_url") or nr.get("market_url") or nr.get("shop_in_person_url") or ""
+    if u2:
+        lab2 = (nr.get("shop_inperson_label") or "Shop in person")[:64]
+        links.append({"label": lab2, "url": u2[:2048]})
+    return links[:4]
+
+
+def _vendor_csv_truthy(val: str) -> bool:
+    return (val or "").lower() in ("1", "true", "yes", "y")
+
+
+@router.post("/vendors/import-csv")
+async def admin_import_vendors_csv(
+    admin: CurrentAdmin,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    file: Annotated[UploadFile, File()],
+    refresh: bool = False,
+) -> dict:
+    """Import seller rows from CSV. Headers (case-insensitive, aliases in parentheses):
+
+    Required: ``brand_name`` (or ``name``).
+
+    Optional: ``category``, ``city``, ``state`` (or ``st``), ``zip`` / ``postal_code``,
+    ``address_line1`` / ``addr1``, ``address_line2`` / ``addr2``,
+    ``phone``, ``fax``, ``contact_name`` / ``contact``, ``contact_email``, ``submitted_email`` / ``email``,
+    ``bio_150`` / ``bio``, ``description_full`` / ``description``,
+    ``shop_url`` / ``website``, ``shop_inperson_url``, ``shop_url_label``, ``shop_inperson_label``,
+    ``logo_url``, ``banner_url``, ``status`` (default ``published``), ``featured``,
+    ``pt_category_names`` (pipe-separated), ``pt_current_locations``, ``pt_previous_locations`` (pipe-separated),
+    ``id`` (when ``refresh`` is true, update this vendor by id instead of insert).
+
+    If ``submitted_email`` and ``contact_email`` are both empty, a placeholder ``@invalid`` address is used.
+    When ``refresh=false`` (default), skips rows whose ``brand_name`` already exists (case-insensitive).
+    When ``refresh=true``, updates by ``id`` if given, else first vendor matching ``brand_name``.
+    """
+    _ = admin
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(400, "Empty file")
+    text = raw.decode("utf-8", errors="replace")
+    reader = csv.DictReader(io.StringIO(text))
+    if not reader.fieldnames:
+        raise HTTPException(400, "CSV has no header row")
+
+    created = 0
+    updated = 0
+    skipped = 0
+    errors: list[str] = []
+
+    for line_no, row in enumerate(reader, start=2):
+        try:
+            nr = _csv_row_norm(row)
+            brand = (nr.get("brand_name") or nr.get("name") or "").strip()
+            if not brand:
+                skipped += 1
+                continue
+
+            sub_email = (
+                nr.get("submitted_email") or nr.get("email") or nr.get("contact_email") or ""
+            ).strip()
+            if not sub_email:
+                sub_email = f"csv-import-{line_no}-{secrets.token_hex(4)}@invalid"
+
+            status = (nr.get("status") or "published").strip().lower()
+            if status not in ("pending", "published", "removed"):
+                status = "published"
+
+            city = (nr.get("city") or "").strip() or None
+            state = (nr.get("state") or nr.get("st") or "").strip()[:8] or None
+            bio = (nr.get("bio_150") or nr.get("bio") or "").strip()[:160] or None
+            desc = (nr.get("description_full") or nr.get("description") or "").strip() or None
+
+            fields = {
+                "brand_name": brand[:255],
+                "category": _vendor_csv_category(nr.get("category")),
+                "city": city[:255] if city else None,
+                "state": state,
+                "address_line1": (nr.get("address_line1") or nr.get("addr1") or "").strip()[:255] or None,
+                "address_line2": (nr.get("address_line2") or nr.get("addr2") or "").strip()[:255] or None,
+                "postal_code": (nr.get("postal_code") or nr.get("zip") or "").strip()[:32] or None,
+                "phone": (nr.get("phone") or "").strip()[:64] or None,
+                "fax": (nr.get("fax") or "").strip()[:64] or None,
+                "contact_name": (nr.get("contact_name") or nr.get("contact") or "").strip()[:255] or None,
+                "contact_email": (nr.get("contact_email") or "").strip()[:255] or None,
+                "bio_150": bio,
+                "description_full": desc,
+                "shop_links": _vendor_csv_shop_links(nr),
+                "submitted_email": sub_email[:255],
+                "status": status,
+                "featured": _vendor_csv_truthy(nr.get("featured")),
+                "logo_url": (nr.get("logo_url") or "").strip()[:2048] or None,
+                "banner_url": (nr.get("banner_url") or "").strip()[:2048] or None,
+                "pt_category_names": _vendor_csv_pipe_list(nr.get("pt_category_names") or nr.get("pt_categories") or ""),
+                "pt_current_locations": _vendor_csv_pipe_list(
+                    nr.get("pt_current_locations") or nr.get("current_locations") or ""
+                ),
+                "pt_previous_locations": _vendor_csv_pipe_list(
+                    nr.get("pt_previous_locations") or nr.get("previous_locations") or ""
+                ),
+            }
+            pt_id_raw = (nr.get("pt_listing_id") or "").strip()
+            if pt_id_raw.isdigit():
+                fields["pt_listing_id"] = int(pt_id_raw)
+            else:
+                fields["pt_listing_id"] = None
+
+            existing: Vendor | None = None
+            vid_raw = (nr.get("id") or nr.get("vendor_id") or "").strip()
+            if refresh and vid_raw.isdigit():
+                existing = (
+                    await db.execute(select(Vendor).where(Vendor.id == int(vid_raw)))
+                ).scalar_one_or_none()
+                if not existing:
+                    errors.append(f"Line {line_no}: id {vid_raw} not found")
+                    skipped += 1
+                    continue
+            elif refresh:
+                existing = (
+                    await db.execute(select(Vendor).where(func.lower(Vendor.brand_name) == brand.lower()))
+                ).scalars().first()
+
+            if existing is not None and refresh:
+                for k, v in fields.items():
+                    setattr(existing, k, v)
+                updated += 1
+            elif existing is None and not refresh:
+                dup = (
+                    await db.execute(select(Vendor).where(func.lower(Vendor.brand_name) == brand.lower()))
+                ).scalars().first()
+                if dup:
+                    skipped += 1
+                    continue
+                db.add(Vendor(**fields))
+                created += 1
+            elif existing is None and refresh:
+                db.add(Vendor(**fields))
+                created += 1
+        except Exception as e:  # noqa: BLE001 — per-row import resilience
+            errors.append(f"Line {line_no}: {e}")
+            skipped += 1
+
+    await db.commit()
+    return {
+        "created": created,
+        "updated": updated,
+        "skipped": skipped,
+        "errors": errors[:50],
+    }
 
 
 # --- Legal ---

@@ -9,7 +9,6 @@ const nav = [
   { href: "/community", label: "Community" },
   { href: "/vendors", label: "Vendors" },
   { href: "/legal", label: "Legal" },
-  { href: "/toolkit", label: "Toolkit" },
   { href: "/help", label: "Help vendors" },
 ];
 

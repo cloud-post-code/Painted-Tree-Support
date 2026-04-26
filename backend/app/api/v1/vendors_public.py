@@ -2,7 +2,7 @@ import secrets
 import uuid
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,18 +23,40 @@ class ShopLink(BaseModel):
 
 
 class VendorCreate(BaseModel):
-    brand_name: str = Field(max_length=255)
-    category: str = Field(
-        pattern="^(jewelry|food|clothing|art|beauty|home|other)$"
-    )
-    city: str = Field(max_length=255)
-    state: str = Field(max_length=8)
-    bio_150: str = Field(max_length=160)
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    brand_name: str = Field(min_length=1, max_length=255)
+    category: str = Field(default="other", max_length=64)
+    city: str | None = Field(default=None, max_length=255)
+    state: str | None = Field(default=None, max_length=8)
+    bio_150: str | None = Field(default=None, max_length=160)
+    address_line1: str | None = Field(None, max_length=255)
+    address_line2: str | None = Field(None, max_length=255)
+    postal_code: str | None = Field(None, max_length=32)
+    phone: str | None = Field(None, max_length=64)
+    fax: str | None = Field(None, max_length=64)
+    contact_name: str | None = Field(None, max_length=255)
+    contact_email: EmailStr | None = None
     shop_links: list[ShopLink] = Field(default_factory=list, max_length=4)
     logo_url: str | None = Field(None, max_length=2048)
     banner_url: str | None = Field(None, max_length=2048)
     submitted_email: EmailStr | None = None
     hcaptcha_token: str | None = None
+
+    @field_validator("category", mode="before")
+    @classmethod
+    def category_normalized(cls, v: object) -> str:
+        allowed = frozenset({"jewelry", "food", "clothing", "art", "beauty", "home", "other"})
+        s = (str(v).strip().lower() if v is not None else "") or "other"
+        return s if s in allowed else "other"
+
+    @field_validator("city", "state", "bio_150", mode="after")
+    @classmethod
+    def empty_str_to_none(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        t = str(v).strip()
+        return t or None
 
 
 class VendorUpdateRequest(BaseModel):
@@ -43,6 +65,13 @@ class VendorUpdateRequest(BaseModel):
     city: str | None = None
     state: str | None = None
     bio_150: str | None = Field(None, max_length=160)
+    address_line1: str | None = Field(None, max_length=255)
+    address_line2: str | None = Field(None, max_length=255)
+    postal_code: str | None = Field(None, max_length=32)
+    phone: str | None = Field(None, max_length=64)
+    fax: str | None = Field(None, max_length=64)
+    contact_name: str | None = Field(None, max_length=255)
+    contact_email: EmailStr | None = None
     shop_links: list[ShopLink] | None = None
     submitted_email: EmailStr
     note: str | None = None
@@ -78,8 +107,38 @@ async def list_vendors(
     out = [_vendor_public(r) for r in rows]
     if search:
         s = search.lower()
-        out = [v for v in out if s in v["brand_name"].lower() or s in (v.get("bio_150") or "").lower()]
+
+        def _haystack(vendor: dict) -> str:
+            parts: list[str] = [
+                vendor.get("brand_name") or "",
+                vendor.get("bio_150") or "",
+                vendor.get("description_full") or "",
+                vendor.get("city") or "",
+                vendor.get("state") or "",
+                vendor.get("address_line1") or "",
+                vendor.get("address_line2") or "",
+                vendor.get("postal_code") or "",
+                vendor.get("phone") or "",
+                vendor.get("fax") or "",
+                vendor.get("contact_name") or "",
+                vendor.get("contact_email") or "",
+                str(vendor.get("id") or ""),
+            ]
+            parts.extend(str(x) for x in (vendor.get("pt_category_names") or []))
+            parts.extend(str(x) for x in (vendor.get("pt_current_locations") or []))
+            return " ".join(parts).lower()
+
+        out = [v for v in out if s in _haystack(v)]
     return out
+
+
+def _strip_opt(s: str | None, max_len: int) -> str | None:
+    if s is None:
+        return None
+    t = str(s).strip()
+    if not t:
+        return None
+    return t[:max_len]
 
 
 def _vendor_public(v: Vendor) -> dict:
@@ -89,6 +148,13 @@ def _vendor_public(v: Vendor) -> dict:
         "category": v.category,
         "city": v.city,
         "state": v.state,
+        "address_line1": v.address_line1,
+        "address_line2": v.address_line2,
+        "postal_code": v.postal_code,
+        "phone": v.phone,
+        "fax": v.fax,
+        "contact_name": v.contact_name,
+        "contact_email": v.contact_email,
         "bio_150": v.bio_150,
         "description_full": v.description_full,
         "pt_category_names": v.pt_category_names or [],
@@ -170,11 +236,18 @@ async def create_vendor(
     logo = _validated_asset_url(body.logo_url)
     banner = _validated_asset_url(body.banner_url)
     row = Vendor(
-        brand_name=body.brand_name,
+        brand_name=body.brand_name.strip(),
         category=body.category,
-        city=body.city,
-        state=body.state,
-        bio_150=body.bio_150,
+        city=_strip_opt(body.city, 255),
+        state=_strip_opt(body.state, 8),
+        bio_150=_strip_opt(body.bio_150, 160),
+        address_line1=_strip_opt(body.address_line1, 255),
+        address_line2=_strip_opt(body.address_line2, 255),
+        postal_code=_strip_opt(body.postal_code, 32),
+        phone=_strip_opt(body.phone, 64),
+        fax=_strip_opt(body.fax, 64),
+        contact_name=_strip_opt(body.contact_name, 255),
+        contact_email=str(body.contact_email).strip() if body.contact_email else None,
         shop_links=links,
         logo_url=logo,
         banner_url=banner,

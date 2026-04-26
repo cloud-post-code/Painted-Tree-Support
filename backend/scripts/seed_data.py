@@ -265,7 +265,7 @@ async def main() -> None:
                 "instagram",
                 "Instagram Shopping",
                 "Catalog and product tagging.",
-                "## Catalog\nConnect Meta Commerce Manager.\n\n## Tagging\nTag products in posts and Reels.\n\n## Captions\nUse three sample captions from your toolkit page.",
+                "## Catalog\nConnect Meta Commerce Manager.\n\n## Tagging\nTag products in posts and Reels.\n\n## Captions\nDraft three short captions that highlight your products and call to action.",
                 5,
             ),
             (
@@ -424,59 +424,82 @@ async def main() -> None:
                 )
             )
 
-        listing_seeds: list[tuple[str, str, str, str, str, str, str, str | None]] = [
-            (
-                "booth_offer",
-                "Riverside Weekend Market",
-                "Austin",
-                "TX",
-                "reduced",
-                "Two 10x10 spots opening June",
-                "ops@example.org",
-                None,
-            ),
-            (
-                "booth_offer",
-                "Harborview Night Market",
-                "Seattle",
-                "WA",
-                "market",
-                "Four covered bays on Friday evenings; power available.",
-                "harborview@example.org",
-                "206-555-0100",
-            ),
-            (
-                "booth_offer",
-                "Midtown Makers Hall",
-                "Chicago",
-                "IL",
-                "reduced",
-                "Shared retail wall + weekend table bundle for jewelry and small goods.",
-                "makershall@example.org",
-                None,
-            ),
-            (
-                "vendor_seeking",
-                "Bloom & Thread",
-                "Denver",
-                "CO",
-                "reduced",
-                "Jewelry vendor seeking 8x8 or shared case near LoDo; available Tue–Sun.",
-                "hello@example.org",
-                None,
-            ),
-            (
-                "vendor_seeking",
-                "Spice Route Pop-Up",
-                "Miami",
-                "FL",
-                "free",
-                "Packaged food vendor needs covered weekend spot; has all permits.",
-                "spiceroute@example.org",
-                None,
-            ),
+        _u = "https://images.unsplash.com"
+        listing_seeds: list[dict[str, str | None]] = [
+            {
+                "type": "booth_offer",
+                "brand_or_space_name": "Riverside Weekend Market",
+                "location_city": "Austin",
+                "location_state": "TX",
+                "cost_tier": "reduced",
+                "availability_text": "Two 10x10 spots opening June",
+                "contact_email": "ops@example.org",
+                "contact_phone": None,
+                "website_url": "https://ogp.me/",
+                "category": "retail",
+                "hero_image_url": f"{_u}/photo-1555529900-a56c90d6991a?w=800&q=80",
+            },
+            {
+                "type": "booth_offer",
+                "brand_or_space_name": "Harborview Night Market",
+                "location_city": "Seattle",
+                "location_state": "WA",
+                "cost_tier": "market",
+                "availability_text": "Four covered bays on Friday evenings; power available.",
+                "contact_email": "harborview@example.org",
+                "contact_phone": "206-555-0100",
+                "website_url": "https://www.seattle.gov",
+                "category": "services",
+                "hero_image_url": f"{_u}/photo-1497366216548-37526070297c?w=800&q=80",
+            },
+            {
+                "type": "booth_offer",
+                "brand_or_space_name": "Midtown Makers Hall",
+                "location_city": "Chicago",
+                "location_state": "IL",
+                "cost_tier": "reduced",
+                "availability_text": (
+                    "Shared retail wall + weekend table bundle for jewelry and small goods."
+                ),
+                "contact_email": "makershall@example.org",
+                "contact_phone": None,
+                "website_url": None,
+                "category": "crafts",
+                "hero_image_url": f"{_u}/photo-1452860606245-08befc0ff44b?w=800&q=80",
+            },
+            {
+                "type": "vendor_seeking",
+                "brand_or_space_name": "Bloom & Thread",
+                "location_city": "Denver",
+                "location_state": "CO",
+                "cost_tier": "reduced",
+                "availability_text": (
+                    "Jewelry vendor seeking 8x8 or shared case near LoDo; available Tue–Sun."
+                ),
+                "contact_email": "hello@example.org",
+                "contact_phone": None,
+                "website_url": "https://ogp.me/",
+                "category": "retail",
+                "hero_image_url": f"{_u}/photo-1515377905703-c4788e51af15?w=800&q=80",
+            },
+            {
+                "type": "vendor_seeking",
+                "brand_or_space_name": "Spice Route Pop-Up",
+                "location_city": "Miami",
+                "location_state": "FL",
+                "cost_tier": "free",
+                "availability_text": "Packaged food vendor needs covered weekend spot; has all permits.",
+                "contact_email": "spiceroute@example.org",
+                "contact_phone": None,
+                "website_url": "https://www.fda.gov/food",
+                "category": "food",
+                "hero_image_url": f"{_u}/photo-1546069901-ba9599a7e63c?w=800&q=80",
+            },
         ]
-        for typ, name, city, st, tier, avail, email, phone in listing_seeds:
+        for seed in listing_seeds:
+            typ = str(seed["type"])
+            name = str(seed["brand_or_space_name"])
+            city = str(seed["location_city"])
             exists = (
                 await db.execute(
                     select(Listing).where(
@@ -493,11 +516,14 @@ async def main() -> None:
                     type=typ,
                     brand_or_space_name=name,
                     location_city=city,
-                    location_state=st,
-                    cost_tier=tier,
-                    availability_text=avail,
-                    contact_email=email,
-                    contact_phone=phone,
+                    location_state=str(seed["location_state"]),
+                    cost_tier=str(seed["cost_tier"]),
+                    availability_text=str(seed["availability_text"]),
+                    contact_email=str(seed["contact_email"]),
+                    contact_phone=seed.get("contact_phone"),
+                    website_url=seed.get("website_url"),
+                    category=str(seed.get("category") or "general"),
+                    hero_image_url=seed.get("hero_image_url"),
                     status="published",
                 )
             )

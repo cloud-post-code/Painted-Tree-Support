@@ -8,6 +8,7 @@ from app.deps import OptionalUser
 from app.limiter import limiter
 from app.models.listing import Listing
 from app.services.captcha import verify_hcaptcha
+from app.services.link_preview import fetch_hero_image_url, normalize_page_url
 
 router = APIRouter(prefix="/listings", tags=["listings"])
 
@@ -23,6 +24,11 @@ class ListingCreate(BaseModel):
     availability_text: str
     contact_phone: str | None = Field(None, max_length=64)
     contact_email: EmailStr | None = None
+    website_url: str | None = Field(None, max_length=2048)
+    category: str = Field(
+        "general",
+        pattern="^(general|food|retail|crafts|services|beauty)$",
+    )
     description: str | None = None
     hcaptcha_token: str | None = None
 
@@ -53,6 +59,11 @@ def _listing_public(r: Listing) -> dict:
         "cost_tier": r.cost_tier,
         "availability_text": r.availability_text,
         "description": r.description,
+        "contact_email": r.contact_email,
+        "contact_phone": r.contact_phone,
+        "website_url": r.website_url,
+        "category": r.category or "general",
+        "hero_image_url": r.hero_image_url,
     }
 
 
@@ -79,6 +90,10 @@ async def create_listing(
     if not await verify_hcaptcha(body.hcaptcha_token, request.client.host if request.client else None):
         raise HTTPException(status_code=400, detail="Captcha failed")
     phone = (body.contact_phone or "").strip() or None
+    web_norm = normalize_page_url(body.website_url or "")
+    hero: str | None = None
+    if web_norm:
+        hero = await fetch_hero_image_url(web_norm)
     row = Listing(
         type=body.listing_type,
         brand_or_space_name=body.brand_or_space_name,
@@ -88,6 +103,9 @@ async def create_listing(
         availability_text=body.availability_text,
         contact_phone=phone[:64] if phone else None,
         contact_email=contact_email,
+        website_url=web_norm,
+        category=body.category,
+        hero_image_url=hero[:2048] if hero else None,
         description=body.description,
         status="pending",
         user_id=user.id if user else None,

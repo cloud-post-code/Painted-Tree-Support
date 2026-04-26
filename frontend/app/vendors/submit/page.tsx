@@ -30,8 +30,8 @@ export default function VendorSubmitPage() {
     <div className="mx-auto max-w-xl px-4 py-10 sm:px-6">
       <h1 className="text-2xl font-bold">Submit your vendor profile</h1>
       <p className="mt-2 text-sm text-black/70">
-        Add one link where you sell online and one where you sell in person (both optional). You can add more links
-        later by requesting an update. Profiles are reviewed before going live.
+        Only <strong>brand name</strong> is required. Location, bio, category, and shop links are optional; you can add
+        details later. Profiles are reviewed before going live.
       </p>
       {isAuthed && (
         <p className="mt-3 rounded-md bg-[var(--vrr-cream)] px-3 py-2 text-sm">
@@ -43,17 +43,29 @@ export default function VendorSubmitPage() {
         onSubmit={async (e) => {
           e.preventDefault();
           const fd = new FormData(e.currentTarget);
+          const brand = String(fd.get("brand_name") || "").trim();
+          if (!brand) {
+            setMsg("Please enter a brand name.");
+            return;
+          }
           const shop_links: { label: string; url: string }[] = [];
           const online = String(fd.get("shop_online_url") || "").trim();
           const inPerson = String(fd.get("shop_inperson_url") || "").trim();
           if (online) shop_links.push({ label: "Shop online", url: online });
           if (inPerson) shop_links.push({ label: "Shop in person", url: inPerson });
           const body: Record<string, unknown> = {
-            brand_name: fd.get("brand_name"),
-            category: fd.get("category"),
-            city: fd.get("city"),
-            state: fd.get("state"),
-            bio_150: fd.get("bio_150"),
+            brand_name: brand,
+            category: String(fd.get("category") || "").trim() || "other",
+            city: String(fd.get("city") || "").trim() || null,
+            state: String(fd.get("state") || "").trim().toUpperCase().slice(0, 8) || null,
+            bio_150: String(fd.get("bio_150") || "").trim() || null,
+            address_line1: String(fd.get("address_line1") || "").trim() || null,
+            address_line2: String(fd.get("address_line2") || "").trim() || null,
+            postal_code: String(fd.get("postal_code") || "").trim() || null,
+            phone: String(fd.get("phone") || "").trim() || null,
+            fax: String(fd.get("fax") || "").trim() || null,
+            contact_name: String(fd.get("contact_name") || "").trim() || null,
+            contact_email: String(fd.get("contact_email") || "").trim() || null,
             shop_links,
             logo_url: logoUrl,
             banner_url: bannerUrl,
@@ -85,8 +97,8 @@ export default function VendorSubmitPage() {
           <Input id="brand_name" name="brand_name" required className="mt-1" />
         </div>
         <div>
-          <Label htmlFor="category">Category</Label>
-          <select id="category" name="category" className="mt-1 w-full rounded-lg border p-2" required>
+          <Label htmlFor="category">Category (optional)</Label>
+          <select id="category" name="category" className="mt-1 w-full rounded-lg border p-2" defaultValue="other">
             {CATEGORIES.map((c) => (
               <option key={c.value} value={c.value}>
                 {c.label}
@@ -96,18 +108,56 @@ export default function VendorSubmitPage() {
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
-            <Label htmlFor="city">City</Label>
-            <Input id="city" name="city" required className="mt-1" />
+            <Label htmlFor="city">City (optional)</Label>
+            <Input id="city" name="city" className="mt-1" />
           </div>
           <div>
-            <Label htmlFor="state">State</Label>
-            <Input id="state" name="state" maxLength={2} required className="mt-1" placeholder="TX" />
+            <Label htmlFor="state">State (optional)</Label>
+            <Input id="state" name="state" maxLength={8} className="mt-1" placeholder="TX" />
           </div>
         </div>
         <div>
-          <Label htmlFor="bio_150">Short bio (directory listing, max 160 characters)</Label>
-          <Textarea id="bio_150" name="bio_150" maxLength={160} required className="mt-1" rows={3} />
-          <p className="mt-1 text-xs text-black/50">Shown on your public card; a longer description can be added after approval.</p>
+          <Label htmlFor="address_line1">Street address line 1</Label>
+          <Input id="address_line1" name="address_line1" className="mt-1" autoComplete="address-line1" />
+        </div>
+        <div>
+          <Label htmlFor="address_line2">Street address line 2</Label>
+          <Input id="address_line2" name="address_line2" className="mt-1" autoComplete="address-line2" />
+        </div>
+        <div>
+          <Label htmlFor="postal_code">ZIP / postal code</Label>
+          <Input id="postal_code" name="postal_code" className="mt-1" autoComplete="postal-code" />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <Label htmlFor="phone">Phone</Label>
+            <Input id="phone" name="phone" type="tel" className="mt-1" autoComplete="tel" />
+          </div>
+          <div>
+            <Label htmlFor="fax">Fax</Label>
+            <Input id="fax" name="fax" type="tel" className="mt-1" />
+          </div>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <Label htmlFor="contact_name">Contact name</Label>
+            <Input id="contact_name" name="contact_name" className="mt-1" autoComplete="name" />
+          </div>
+          <div>
+            <Label htmlFor="contact_email">Business contact email</Label>
+            <Input id="contact_email" name="contact_email" type="email" className="mt-1" autoComplete="email" />
+            <p className="mt-1 text-xs text-black/50">
+              Optional public email for customers. Your submission / account email stays private unless you choose to
+              match this field.
+            </p>
+          </div>
+        </div>
+        <div>
+          <Label htmlFor="bio_150">Short bio (optional, max 160 characters)</Label>
+          <Textarea id="bio_150" name="bio_150" maxLength={160} className="mt-1" rows={3} />
+          <p className="mt-1 text-xs text-black/50">
+            Shown on your public card when provided; a longer description can be added after approval.
+          </p>
         </div>
         <div className="rounded-lg border border-black/10 bg-black/[0.02] p-4 space-y-6">
           <p className="text-sm font-medium text-black/80">Images (optional)</p>

@@ -7,9 +7,16 @@ type Vendor = {
   id: number;
   brand_name: string;
   category: string;
-  city: string;
-  state: string;
-  bio_150: string;
+  city?: string | null;
+  state?: string | null;
+  address_line1?: string | null;
+  address_line2?: string | null;
+  postal_code?: string | null;
+  phone?: string | null;
+  fax?: string | null;
+  contact_name?: string | null;
+  contact_email?: string | null;
+  bio_150?: string | null;
   description_full?: string | null;
   pt_category_names?: string[];
   pt_current_locations?: string[];
@@ -21,7 +28,8 @@ type Vendor = {
 
 function categoryLabels(v: Vendor): string[] {
   if (v.pt_category_names && v.pt_category_names.length) return v.pt_category_names;
-  return [v.category.charAt(0).toUpperCase() + v.category.slice(1)];
+  const c = v.category || "other";
+  return [c.charAt(0).toUpperCase() + c.slice(1)];
 }
 
 export default async function VendorProfile({ params }: { params: Promise<{ id: string }> }) {
@@ -34,7 +42,10 @@ export default async function VendorProfile({ params }: { params: Promise<{ id: 
   }
   if (!v) notFound();
 
-  const bodyText = (v.description_full || "").trim() || v.bio_150;
+  const bodyText = (v.description_full || "").trim() || (v.bio_150 || "").trim();
+  const addrLines = [v.address_line1, v.address_line2].filter(Boolean) as string[];
+  const cityLine = [v.city, v.state, v.postal_code].filter((x) => x && String(x).trim()).join(", ");
+  const locationFallback = cityLine || "Location not listed";
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-10 sm:px-6">
@@ -42,9 +53,39 @@ export default async function VendorProfile({ params }: { params: Promise<{ id: 
         ← Directory
       </Link>
       <h1 className="mt-4 text-3xl font-bold">{v.brand_name}</h1>
-      <p className="text-sm text-black/60">
-        {v.city}, {v.state}
-      </p>
+      <div className="text-sm text-black/60">
+        {addrLines.length > 0 ? (
+          <p className="whitespace-pre-line">
+            {addrLines.join("\n")}
+            {cityLine ? `\n${cityLine}` : ""}
+          </p>
+        ) : (
+          <p>{locationFallback}</p>
+        )}
+      </div>
+      {(v.contact_name || v.phone || v.fax || v.contact_email) && (
+        <div className="mt-3 rounded-lg border border-black/10 bg-black/[0.02] px-3 py-2 text-sm text-black/75">
+          <p className="font-medium text-black/85">Contact</p>
+          {v.contact_name ? <p className="mt-1">{v.contact_name}</p> : null}
+          {v.phone ? (
+            <p className="mt-1">
+              Phone:{" "}
+              <a href={`tel:${v.phone.replace(/\s/g, "")}`} className="text-[var(--vrr-teal)] underline">
+                {v.phone}
+              </a>
+            </p>
+          ) : null}
+          {v.fax ? <p className="mt-1">Fax: {v.fax}</p> : null}
+          {v.contact_email ? (
+            <p className="mt-1">
+              Email:{" "}
+              <a href={`mailto:${v.contact_email}`} className="text-[var(--vrr-teal)] underline">
+                {v.contact_email}
+              </a>
+            </p>
+          ) : null}
+        </div>
+      )}
       <div className="mt-3 flex flex-wrap gap-1.5">
         {categoryLabels(v).map((c, i) => (
           <span
@@ -77,7 +118,11 @@ export default async function VendorProfile({ params }: { params: Promise<{ id: 
           />
         ) : null}
         <div className="min-w-0 flex-1">
-          <p className="whitespace-pre-wrap text-[0.95rem] leading-relaxed">{bodyText}</p>
+          {bodyText ? (
+            <p className="whitespace-pre-wrap text-[0.95rem] leading-relaxed">{bodyText}</p>
+          ) : (
+            <p className="text-sm text-black/55">No description yet.</p>
+          )}
           {v.pt_previous_locations && v.pt_previous_locations.length > 0 ? (
             <p className="mt-3 text-sm text-black/65">
               <span className="font-medium text-black/80">Previous Painted Tree: </span>

@@ -22,7 +22,6 @@ from app.api.v1 import (
     site,
     stripe_webhook,
     supporters_public,
-    toolkit_public,
     triage_routes,
     vendors_public,
 )
@@ -71,7 +70,6 @@ def create_app() -> FastAPI:
     api.include_router(community_routes.router)
     api.include_router(vendors_public.router)
     api.include_router(legal_public.router)
-    api.include_router(toolkit_public.router)
     api.include_router(supporters_public.router)
     api.include_router(donations.router)
     api.include_router(stripe_webhook.router)

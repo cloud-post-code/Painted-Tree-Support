@@ -10,9 +10,16 @@ type Vendor = {
   id: number;
   brand_name: string;
   category: string;
-  city: string;
-  state: string;
-  bio_150: string;
+  city?: string | null;
+  state?: string | null;
+  address_line1?: string | null;
+  address_line2?: string | null;
+  postal_code?: string | null;
+  phone?: string | null;
+  fax?: string | null;
+  contact_name?: string | null;
+  contact_email?: string | null;
+  bio_150?: string | null;
   description_full?: string | null;
   pt_category_names?: string[];
   pt_current_locations?: string[];
@@ -21,6 +28,36 @@ type Vendor = {
   banner_url?: string | null;
   pt_previous_locations?: string[];
 };
+
+function formatVendorLocation(v: Vendor): string {
+  const loc = [v.city, v.state].filter((x) => x && String(x).trim());
+  const pc = (v.postal_code || "").trim();
+  if (loc.length && pc) return `${loc.join(", ")} ${pc}`;
+  if (loc.length) return loc.join(", ");
+  if (pc) return pc;
+  return "Location not listed";
+}
+
+function vendorSearchHaystack(v: Vendor): string {
+  const parts = [
+    v.brand_name,
+    v.bio_150 || "",
+    v.description_full || "",
+    v.city || "",
+    v.state || "",
+    v.address_line1 || "",
+    v.address_line2 || "",
+    v.postal_code || "",
+    v.phone || "",
+    v.fax || "",
+    v.contact_name || "",
+    v.contact_email || "",
+    String(v.id),
+    ...(v.pt_category_names || []),
+    ...(v.pt_current_locations || []),
+  ];
+  return parts.join(" ").toLowerCase();
+}
 
 function categoryLabels(v: Vendor): string[] {
   if (v.pt_category_names && v.pt_category_names.length) return v.pt_category_names;
@@ -59,17 +96,11 @@ export default function VendorsPage() {
   const filtered = useMemo(() => {
     return rows.filter((v) => {
       if (cat && v.category !== cat) return false;
-      if (st && v.state !== st.toUpperCase()) return false;
+      if (st && (v.state || "").toUpperCase() !== st.toUpperCase()) return false;
       if (q) {
         const s = q.toLowerCase();
         const inCats = categoryLabels(v).some((c) => c.toLowerCase().includes(s));
-        const inDesc = (v.description_full || "").toLowerCase().includes(s);
-        if (
-          !v.brand_name.toLowerCase().includes(s) &&
-          !v.bio_150.toLowerCase().includes(s) &&
-          !inCats &&
-          !inDesc
-        ) {
+        if (!vendorSearchHaystack(v).includes(s) && !inCats) {
           return false;
         }
       }
@@ -91,7 +122,12 @@ export default function VendorsPage() {
       <div className="mt-8 grid gap-4 sm:grid-cols-3">
         <div>
           <Label>Search</Label>
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name or keywords" className="mt-1" />
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Name, city, phone, email, ZIP…"
+            className="mt-1"
+          />
         </div>
         <div>
           <Label>Category</Label>
@@ -141,10 +177,13 @@ export default function VendorsPage() {
                   <Link href={`/vendors/${v.id}`} className="text-lg font-semibold text-[var(--vrr-teal)]">
                     {v.brand_name}
                   </Link>
-                  <p className="text-sm text-black/60">
-                    {v.city}, {v.state}
-                  </p>
-                  <p className="mt-2 text-sm">{v.bio_150}</p>
+                  <p className="text-sm text-black/60">{formatVendorLocation(v)}</p>
+                  {v.contact_name || v.phone ? (
+                    <p className="mt-1 text-xs text-black/50">
+                      {[v.contact_name, v.phone].filter(Boolean).join(" · ")}
+                    </p>
+                  ) : null}
+                  {v.bio_150?.trim() ? <p className="mt-2 text-sm">{v.bio_150}</p> : null}
                 </div>
               </div>
               <div className="mt-3 flex flex-wrap gap-1.5">
