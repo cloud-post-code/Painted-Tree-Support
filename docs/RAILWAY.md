@@ -134,3 +134,43 @@ Then sign in at `https://your-web-url/admin/login`.
 - **Build command** (service settings): only if the default is wrong; Railway runs it after tool install.
 - **Railpack:** [environment variables](https://railpack.com/config/environment-variables)
 - **`RAILPACK_CONFIG_FILE`:** path relative to the service root if you relocate `railpack.json`.
+
+---
+
+## Troubleshooting: HTTP 502 on `/api/v1/*`
+
+A **502 Bad Gateway** means nginx (all-in-one) or your host proxy could not get a valid response from **FastAPI**. The browser may then show failed fetches for paths like `/api/v1/announcements/active`, `/api/v1/vendors`, or supporter routes.
+
+### All-in-one (single Docker service)
+
+1. Open **deploy logs** and confirm you see `railway: starting uvicorn…` with **no** immediate exit. If migrations fail, the [entrypoint](../deploy/railway/entrypoint.sh) exits before nginx is useful for API traffic.
+2. Confirm **`DATABASE_URL`** uses `postgresql+asyncpg://…` (convert from `postgres://` if Railway gave the latter). Wrong or unreachable DB often breaks migrations or runtime.
+3. From your machine (replace with your public URL):
+
+   ```bash
+   curl -sS -o /dev/null -w "%{http_code}\n" https://YOUR_HOST/api/v1/health
+   ```
+
+   Expect **200**. If you get **502**, the API process is not healthy behind nginx.
+
+### Split stack (`api` + `web`)
+
+1. **`api` service:** `curl "$API_PUBLIC_URL/api/v1/health"` should return **200**. Fix `DATABASE_URL`, migrations, and API logs first.
+2. **`web` service — `API_INTERNAL_URL`:** Server-side [BFF](../frontend/app/api/bff/[[...path]]/route.ts) must reach the API from the Next.js process. Set `API_INTERNAL_URL` to the API base URL (public or private networking URL per Railway). If it is wrong or unset when `NEXT_PUBLIC_API_URL` is `same`, the BFF may return JSON **502** with a hint about `API_INTERNAL_URL`.
+3. **`BACKEND_CORS_ORIGINS` on `api`:** Must include your **web** origin (e.g. `https://your-web.up.railway.app`) so browser calls that go **directly** to the API (when `NEXT_PUBLIC_API_URL` is not `same`) are allowed.
+
+### JSON parse errors in the console after 502
+
+If the proxy returns an **HTML** error page, any code that calls `response.json()` on that body can throw `Unexpected token '<'`. The app’s shared helper [`readResponseBodyJson`](../frontend/lib/api.ts) avoids throwing on non-JSON bodies; remaining **502** fixes are operational (API up, env correct), not a substitute for a running backend.
+
+---
+
+## Browser console: extension noise and preload warnings
+
+### `mce-autosize-textarea` / `webcomponents-ce.js` / `overlay_bundle.js`
+
+Errors like **“A custom element with name 'mce-autosize-textarea' has already been defined”** with a stack in **`overlay_bundle.js`** do **not** come from this repo. They usually indicate a **browser extension** (or injected overlay) registering web components twice. **Mitigation:** try an Incognito window with extensions disabled, another browser profile, or rule out extensions on that site.
+
+### “The resource was preloaded using link preload but not used…”
+
+Chrome often reports this for **Next.js font preloads** (e.g. `next/font/google`). It is a **performance hint**, not a broken feature. You can ignore it unless you add your own `<link rel="preload">` with a wrong `as` attribute.

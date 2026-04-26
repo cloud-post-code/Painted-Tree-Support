@@ -1,5 +1,3 @@
-const _DEBUG_INGEST = "http://127.0.0.1:7764/ingest/615fd78e-be81-4ea3-9929-0678e6a94e41";
-
 function sameOriginApi(): boolean {
   const v = process.env.NEXT_PUBLIC_API_URL;
   return v === "same" || v === "";
@@ -13,27 +11,6 @@ export async function readResponseBodyJson<T = unknown>(r: Response): Promise<T 
   const text = await r.text();
   const trimmed = text.trimStart();
   const looksJson = trimmed.startsWith("{") || trimmed.startsWith("[");
-  // #region agent log
-  if (typeof fetch !== "undefined") {
-    void fetch(_DEBUG_INGEST, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "e58857" },
-      body: JSON.stringify({
-        sessionId: "e58857",
-        location: "lib/api.ts:readResponseBodyJson",
-        message: "response shape",
-        data: {
-          ok: r.ok,
-          status: r.status,
-          looksJson,
-          prefix: trimmed.slice(0, 48),
-        },
-        timestamp: Date.now(),
-        hypothesisId: r.status >= 502 ? "H1" : "H2",
-      }),
-    }).catch(() => {});
-  }
-  // #endregion
   if (!looksJson) return null;
   try {
     return JSON.parse(text) as T;

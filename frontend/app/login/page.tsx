@@ -6,6 +6,7 @@ import { Suspense, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { readResponseBodyJson } from "@/lib/api";
 
 function LoginForm() {
   const router = useRouter();
@@ -40,7 +41,11 @@ function LoginForm() {
               setErr("Invalid email or password.");
               return;
             }
-            const data = (await r.json()) as { is_admin?: boolean };
+            const data = await readResponseBodyJson<{ is_admin?: boolean }>(r);
+            if (data === null) {
+              setErr("Unexpected response from server. Try again or contact support if this persists.");
+              return;
+            }
             const dest = data.is_admin ? "/admin" : next;
             router.push(dest);
             router.refresh();

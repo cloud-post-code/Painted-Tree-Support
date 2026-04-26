@@ -45,7 +45,7 @@ make dev
 
 **Split path (api + web):** two services — `api` with root `backend/` and config `/backend/railway.json`, `web` with root `frontend/` and config `/frontend/railway.json` (paths from repo root). Uses **Railpack** plus `backend/railpack.json` / `frontend/railpack.json` for runtime pins. Set `NEXT_PUBLIC_API_URL` to the API’s public URL and `BACKEND_CORS_ORIGINS` to the web origin.
 
-Details, env tables, migrations, and bootstrap: [docs/RAILWAY.md](docs/RAILWAY.md).
+Details, env tables, migrations, bootstrap, and troubleshooting (502 / API, browser console noise): [docs/RAILWAY.md](docs/RAILWAY.md).
 
 ## Bootstrap admin
 
