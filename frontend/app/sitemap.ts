@@ -17,7 +17,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/toolkit/email",
     "/toolkit/we-moved",
     "/toolkit/link-in-bio",
-    "/toolkit/landing-page",
     "/help",
     "/help/space",
     "/help/services",

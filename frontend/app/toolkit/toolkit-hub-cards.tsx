@@ -27,11 +27,6 @@ const TOOLS = [
     title: "Link-in-bio guide",
     description: "Step-by-step so followers land on your new booth, shop, or signup.",
   },
-  {
-    href: "/toolkit/landing-page",
-    title: "Simple landing page",
-    description: "Lightweight one-page setup (e.g. Carrd) to point ads and QR codes at.",
-  },
 ] as const;
 
 export function ToolkitHubCards() {

@@ -2,7 +2,7 @@
 
 ## Summary
 
-The audience recovery toolkit helps vendors reconnect with customers after a move or relaunch. The hub surfaces five tools as distinct cards; each card includes a clear path into the tool and a one-click action to copy a shareable link to that tool.
+The audience recovery toolkit helps vendors reconnect with customers after a move or relaunch. The hub surfaces four tools as distinct cards; each card includes a clear path into the tool and a one-click action to copy a shareable link to that tool.
 
 ## Goals
 
@@ -18,7 +18,6 @@ The audience recovery toolkit helps vendors reconnect with customers after a mov
 | Email announcements | `/toolkit/email` | API-driven templates + per-template copy (body) |
 | “We moved” messaging kit | `/toolkit/we-moved` | PDF download |
 | Link-in-bio guide | `/toolkit/link-in-bio` | CMS guide (markdown) |
-| Simple landing page | `/toolkit/landing-page` | CMS guide (markdown) |
 
 Out of scope for this PRD: authoring workflow in admin, analytics beyond existing template copy logging.
 
@@ -34,7 +33,7 @@ Out of scope for this PRD: authoring workflow in admin, analytics beyond existin
 ### Hub (`/toolkit`)
 
 - Show a short page title and subtitle (“Reconnect customers after you move or relaunch.”).
-- Render **exactly five** tools, each as a **card** with: title, one-line description, primary CTA (“Open tool”) to the correct route, secondary action **Copy link** that writes the **absolute** URL for that route to the clipboard.
+- Render **exactly four** tools, each as a **card** with: title, one-line description, primary CTA (“Open tool”) to the correct route, secondary action **Copy link** that writes the **absolute** URL for that route to the clipboard.
 - Absolute URL must use the current browser origin in production/staging (no hardcoded Railway hostname in code).
 - After a successful copy, give inline feedback (e.g. button label “Copied” for ~2s). Failed copy should fail silently or show a minimal error state (browser-dependent).
 
@@ -51,7 +50,7 @@ Out of scope for this PRD: authoring workflow in admin, analytics beyond existin
 
 ## Acceptance criteria
 
-- [ ] `/toolkit` shows five cards; each card matches one row in the scope table.
+- [ ] `/toolkit` shows four cards; each card matches one row in the scope table.
 - [ ] “Open tool” navigates to the correct path without full page errors.
 - [ ] “Copy link” puts `https://<current-host>/toolkit/...` on the clipboard for that tool.
 - [ ] Social and email toolkit pages still load templates from the API and copy template text.
