@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     template: "%s | Vendor Recovery Room",
   },
   description:
-    "Lost your booth? Start here. Crisis-to-comeback guidance, cash flow resources, and community for displaced vendors.",
+    "Lost your booth? Start here. Crisis-to-comeback guidance and community for displaced vendors.",
   openGraph: {
     title: "Vendor Recovery Room",
     description: "Crisis-to-comeback platform for displaced vendors.",

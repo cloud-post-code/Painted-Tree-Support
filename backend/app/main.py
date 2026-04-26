@@ -9,7 +9,6 @@ from slowapi.errors import RateLimitExceeded
 from app.api.v1 import (
     admin_manage,
     auth,
-    cashflow_routes,
     community_routes,
     cron_routes,
     donations,
@@ -64,7 +63,6 @@ def create_app() -> FastAPI:
     api.include_router(site.router)
     api.include_router(triage_routes.router)
     api.include_router(downloads_routes.router)
-    api.include_router(cashflow_routes.router)
     api.include_router(guides_routes.router)
     api.include_router(listings_routes.router)
     api.include_router(community_routes.router)

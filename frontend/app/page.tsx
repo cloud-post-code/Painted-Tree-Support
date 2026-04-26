@@ -39,8 +39,7 @@ export default async function HomePage() {
               Lost your booth? Start here.
             </h1>
             <p className="max-w-xl text-lg leading-relaxed text-black/70">
-              One place for emergency steps, selling again, cash relief, and community — so you can act today, not
-              weeks from now.
+              One place for emergency steps, selling again, and community — so you can act today, not weeks from now.
             </p>
             <div className="flex flex-wrap gap-4 text-sm text-black/60">
               {(vendorCount > 0 || resourceCount > 0) && (
