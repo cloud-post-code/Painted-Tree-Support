@@ -1,4 +1,4 @@
-# Vendor Recovery Room
+# Project Re-Paint
 
 Crisis-to-comeback platform for displaced vendors. Monorepo:
 

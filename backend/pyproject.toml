@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "vendor-recovery-room-api"
 version = "0.1.0"
-description = "Vendor Recovery Room API"
+description = "Project Re-Paint API"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     app_env: str = "development"
-    app_name: str = "Vendor Recovery Room API"
+    app_name: str = "Project Re-Paint API"
     api_v1_prefix: str = "/api/v1"
 
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/vrr"

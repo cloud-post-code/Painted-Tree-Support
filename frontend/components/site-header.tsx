@@ -17,7 +17,7 @@ export function SiteHeader() {
     <header className="sticky top-0 z-40 border-b border-black/10 bg-[var(--vrr-cream)]/95 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
         <Link href="/" className="font-semibold tracking-tight text-[var(--vrr-ink)]">
-          Vendor Recovery Room
+          Project Re-Paint
         </Link>
         <nav className="hidden items-center gap-1 md:flex">
           {nav.map((n) => (

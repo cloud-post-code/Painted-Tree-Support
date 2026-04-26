@@ -18,13 +18,13 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "Vendor Recovery Room",
-    template: "%s | Vendor Recovery Room",
+    default: "Project Re-Paint",
+    template: "%s | Project Re-Paint",
   },
   description:
     "Lost your booth? Start here. Crisis-to-comeback guidance and community for displaced vendors.",
   openGraph: {
-    title: "Vendor Recovery Room",
+    title: "Project Re-Paint",
     description: "Crisis-to-comeback platform for displaced vendors.",
     type: "website",
   },

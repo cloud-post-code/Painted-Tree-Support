@@ -1,4 +1,4 @@
-# Vendor Recovery Room — API
+# Project Re-Paint — API
 
 FastAPI service. Run locally:
 

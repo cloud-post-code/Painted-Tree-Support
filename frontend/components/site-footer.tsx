@@ -9,7 +9,7 @@ export function SiteFooter({ showLegalDisclaimer = false }: { showLegalDisclaime
       <div className="mx-auto max-w-6xl space-y-6 px-4 py-10 sm:px-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-white/80">
-            Vendor Recovery Room — crisis-to-comeback support for displaced vendors.
+            Project Re-Paint — crisis-to-comeback support for displaced vendors.
           </p>
           <Link
             href="/community"
