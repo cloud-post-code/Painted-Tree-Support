@@ -6,8 +6,7 @@ export API_INTERNAL_URL="${API_INTERNAL_URL:-http://127.0.0.1:8000}"
 sed "s/__PORT__/${PORT}/g" /etc/nginx/nginx.conf.template >/tmp/nginx.conf
 
 cd /app/backend
-alembic upgrade head
-uvicorn app.main:app --host 127.0.0.1 --port 8000 &
+APP_HOST=127.0.0.1 APP_PORT=8000 sh scripts/start_with_migrations.sh &
 
 WEB_HOME=/app/web
 if [ ! -f "$WEB_HOME/server.js" ]; then
