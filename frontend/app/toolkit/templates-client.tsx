@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, readResponseBodyJson } from "@/lib/api";
 import { MdBody } from "@/components/md-body";
 
 type T = { id: number; title: string; body_md: string; channel?: string | null; tone?: string | null };
@@ -13,9 +13,10 @@ export function TemplatesList({ kind }: { kind: string }) {
   const [copiedId, setCopiedId] = useState<number | null>(null);
 
   useEffect(() => {
-    void fetch(apiUrl(`/api/v1/toolkit/templates?kind=${encodeURIComponent(kind)}`))
-      .then((r) => r.json())
-      .then(setItems);
+    void fetch(apiUrl(`/api/v1/toolkit/templates?kind=${encodeURIComponent(kind)}`)).then(async (r) => {
+      const j = await readResponseBodyJson<T[]>(r);
+      if (Array.isArray(j)) setItems(j);
+    });
   }, [kind]);
 
   useEffect(() => {

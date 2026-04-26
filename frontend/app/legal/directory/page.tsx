@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, readResponseBodyJson } from "@/lib/api";
 import { Label } from "@/components/ui/label";
 
 type Org = {
@@ -26,9 +26,10 @@ export default function LegalDirectoryPage() {
     if (type) q.set("type", type);
     if (state) q.set("state", state);
     if (issue) q.set("issue", issue);
-    void fetch(apiUrl(`/api/v1/legal/orgs?${q.toString()}`))
-      .then((r) => r.json())
-      .then(setOrgs);
+    void fetch(apiUrl(`/api/v1/legal/orgs?${q.toString()}`)).then(async (r) => {
+      const j = await readResponseBodyJson<Org[]>(r);
+      if (Array.isArray(j)) setOrgs(j);
+    });
   }, [type, state, issue]);
 
   return (

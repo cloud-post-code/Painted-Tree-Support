@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, Integer, String, Text, func
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -10,6 +10,9 @@ class Vendor(Base):
     __tablename__ = "vendors"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     pt_listing_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     brand_name: Mapped[str] = mapped_column(String(255), index=True)
     category: Mapped[str] = mapped_column(String(64), index=True)

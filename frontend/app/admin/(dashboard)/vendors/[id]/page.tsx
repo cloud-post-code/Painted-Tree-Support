@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { readResponseBodyJson } from "@/lib/api";
 
 type ShopLink = { label: string; url: string };
 
@@ -105,7 +106,8 @@ export default function AdminVendorEditPage() {
           setErr(await r.text());
           return null;
         }
-        return r.json() as Promise<VendorAdmin>;
+        const row = await readResponseBodyJson<VendorAdmin>(r);
+        return row ?? null;
       })
       .then((row) => {
         if (row) {
@@ -168,7 +170,11 @@ export default function AdminVendorEditPage() {
       setErr(await r.text());
       return;
     }
-    const updated = (await r.json()) as VendorAdmin;
+    const updated = await readResponseBodyJson<VendorAdmin>(r);
+    if (!updated) {
+      setErr("Invalid response from server");
+      return;
+    }
     setV(updated);
     hydrate(updated);
   }

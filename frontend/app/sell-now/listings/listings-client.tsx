@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, readResponseBodyJson } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { trackEvent } from "@/lib/analytics";
+import { useCurrentUser } from "@/lib/use-current-user";
 
 type Listing = {
   id: number;
@@ -23,14 +24,18 @@ export function ListingsClient() {
   const [booths, setBooths] = useState<Listing[]>([]);
   const [seekers, setSeekers] = useState<Listing[]>([]);
   const [msg, setMsg] = useState("");
+  const { user, loading } = useCurrentUser();
+  const isAuthed = !!user;
 
   const load = () => {
-    void fetch(apiUrl("/api/v1/listings?type=booth_offer"))
-      .then((r) => r.json())
-      .then(setBooths);
-    void fetch(apiUrl("/api/v1/listings?type=vendor_seeking"))
-      .then((r) => r.json())
-      .then(setSeekers);
+    void fetch(apiUrl("/api/v1/listings?type=booth_offer")).then(async (r) => {
+      const j = await readResponseBodyJson<Listing[]>(r);
+      if (Array.isArray(j)) setBooths(j);
+    });
+    void fetch(apiUrl("/api/v1/listings?type=vendor_seeking")).then(async (r) => {
+      const j = await readResponseBodyJson<Listing[]>(r);
+      if (Array.isArray(j)) setSeekers(j);
+    });
   };
 
   useEffect(() => {
@@ -39,8 +44,9 @@ export function ListingsClient() {
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    const body = {
+    const form = e.currentTarget;
+    const fd = new FormData(form);
+    const body: Record<string, unknown> = {
       type: fd.get("type"),
       brand_or_space_name: fd.get("brand_or_space_name"),
       location_city: fd.get("location_city"),
@@ -48,23 +54,34 @@ export function ListingsClient() {
       cost_tier: fd.get("cost_tier"),
       availability_text: fd.get("availability_text"),
       contact_phone: (fd.get("contact_phone") as string)?.trim() || null,
-      contact_email: fd.get("contact_email"),
       description: fd.get("description") || null,
-      hcaptcha_token: null as string | null,
+      hcaptcha_token: null,
     };
-    const r = await fetch(apiUrl("/api/v1/listings"), {
+    if (!isAuthed) {
+      body.contact_email = fd.get("contact_email");
+    }
+    const r = await fetch("/api/bff/v1/listings", {
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    const data = await r.json();
+    const data = await readResponseBodyJson<{ detail?: string; id?: number }>(r);
+    if (data === null) {
+      setMsg(
+        r.status >= 502
+          ? "Service temporarily unavailable. Please try again in a few minutes."
+          : "Could not submit listing.",
+      );
+      return;
+    }
     if (!r.ok) {
       setMsg(data.detail || "Error");
       return;
     }
     trackEvent("listing_submit", { id: data.id });
     setMsg("Submitted — pending review. Thank you.");
-    e.currentTarget.reset();
+    form.reset();
   }
 
   return (
@@ -101,6 +118,11 @@ export function ListingsClient() {
       </div>
       <div className="lg:col-span-2">
         <h2 className="text-xl font-semibold">Post a listing</h2>
+        {isAuthed && (
+          <p className="mt-3 max-w-xl rounded-md bg-[var(--vrr-cream)] px-3 py-2 text-sm">
+            Signed in as <strong>{user.email}</strong>. This listing will be linked to your account.
+          </p>
+        )}
         <form className="mt-4 grid max-w-xl gap-3" onSubmit={submit}>
           <div>
             <Label>Type</Label>
@@ -139,10 +161,12 @@ export function ListingsClient() {
             <Label>Contact phone</Label>
             <Input name="contact_phone" type="tel" autoComplete="tel" placeholder="Optional" className="mt-1" />
           </div>
-          <div>
-            <Label>Contact email</Label>
-            <Input name="contact_email" type="email" required className="mt-1" />
-          </div>
+          {!isAuthed && !loading && (
+            <div>
+              <Label>Contact email</Label>
+              <Input name="contact_email" type="email" required className="mt-1" />
+            </div>
+          )}
           <div>
             <Label>Description (optional)</Label>
             <Textarea name="description" className="mt-1" />

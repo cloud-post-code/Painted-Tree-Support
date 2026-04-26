@@ -3,15 +3,17 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { readResponseBodyJson } from "@/lib/api";
 
 type Row = { id: number; body: string; published: boolean };
 
 export default function AdminAnnouncementsPage() {
   const [rows, setRows] = useState<Row[]>([]);
   const load = () =>
-    void fetch("/api/bff/v1/admin/manage/announcements", { credentials: "include" })
-      .then((r) => r.json())
-      .then(setRows);
+    void fetch("/api/bff/v1/admin/manage/announcements", { credentials: "include" }).then(async (r) => {
+      const j = await readResponseBodyJson<Row[]>(r);
+      if (Array.isArray(j)) setRows(j);
+    });
   useEffect(() => {
     load();
   }, []);

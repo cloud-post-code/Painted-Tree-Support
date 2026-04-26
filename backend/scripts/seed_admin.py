@@ -32,7 +32,7 @@ from sqlalchemy import select
 
 from app.core.security import hash_password
 from app.db.session import AsyncSessionLocal
-from app.models.admin_user import AdminUser
+from app.models.user import User
 
 
 def _resolve_credentials(args: argparse.Namespace) -> tuple[str, str]:
@@ -41,7 +41,7 @@ def _resolve_credentials(args: argparse.Namespace) -> tuple[str, str]:
         or os.environ.get("ADMIN_SEED_EMAIL")
         or os.environ.get("ADMIN_EMAIL")
         or ""
-    ).strip()
+    ).strip().lower()
     password = (
         args.password
         or os.environ.get("ADMIN_SEED_PASSWORD")
@@ -59,7 +59,7 @@ def _resolve_credentials(args: argparse.Namespace) -> tuple[str, str]:
 
 
 async def main() -> None:
-    parser = argparse.ArgumentParser(description="Seed an admin_users row for /admin/login.")
+    parser = argparse.ArgumentParser(description="Seed an admin user (users.is_admin=true).")
     parser.add_argument("--email", default=None, help="Admin email (or ADMIN_SEED_EMAIL / ADMIN_EMAIL)")
     parser.add_argument("--password", default=None, help="Plain password (or ADMIN_SEED_PASSWORD / ADMIN_PASSWORD)")
     parser.add_argument(
@@ -72,23 +72,36 @@ async def main() -> None:
 
     async with AsyncSessionLocal() as db:
         if not args.upsert:
-            any_admin = (await db.execute(select(AdminUser).limit(1))).scalar_one_or_none()
+            any_admin = (
+                await db.execute(select(User).where(User.is_admin.is_(True)).limit(1))
+            ).scalar_one_or_none()
             if any_admin:
                 print("An admin user already exists. Use --upsert to create/reset a specific email.")
                 return
 
-        existing = (await db.execute(select(AdminUser).where(AdminUser.email == email))).scalar_one_or_none()
+        existing = (
+            await db.execute(select(User).where(User.email == email))
+        ).scalar_one_or_none()
         if existing:
             if not args.upsert:
-                print(f"Admin {email!r} already exists. Pass --upsert to reset the password.")
+                print(f"User {email!r} already exists. Pass --upsert to reset the password / promote to admin.")
                 return
             existing.password_hash = hash_password(password)
             existing.is_active = True
+            existing.is_admin = True
             await db.commit()
-            print(f"Updated password for admin {email!r}.")
+            print(f"Updated admin {email!r}.")
             return
 
-        db.add(AdminUser(email=email, password_hash=hash_password(password)))
+        db.add(
+            User(
+                email=email,
+                password_hash=hash_password(password),
+                is_admin=True,
+                is_active=True,
+                email_verified=True,
+            )
+        )
         await db.commit()
         print(f"Created admin {email!r}.")
 

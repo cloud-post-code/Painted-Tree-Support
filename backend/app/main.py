@@ -7,6 +7,8 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from app.api.v1 import (
+    account,
+    admin_blasts,
     admin_manage,
     auth,
     community_routes,
@@ -60,6 +62,7 @@ def create_app() -> FastAPI:
     api = APIRouter(prefix=settings.api_v1_prefix)
     api.include_router(health.router)
     api.include_router(auth.router)
+    api.include_router(auth.admin_router)
     api.include_router(site.router)
     api.include_router(triage_routes.router)
     api.include_router(downloads_routes.router)
@@ -72,6 +75,8 @@ def create_app() -> FastAPI:
     api.include_router(supporters_public.router)
     api.include_router(donations.router)
     api.include_router(stripe_webhook.router)
+    api.include_router(account.router)
+    api.include_router(admin_blasts.router)
     api.include_router(admin_manage.router)
     api.include_router(cron_routes.router)
     app.include_router(api)

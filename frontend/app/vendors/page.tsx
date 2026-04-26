@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { apiUrl, resolveMediaUrl } from "@/lib/api";
+import { apiUrl, readResponseBodyJson, resolveMediaUrl } from "@/lib/api";
 
 type Vendor = {
   id: number;
@@ -29,14 +29,31 @@ function categoryLabels(v: Vendor): string[] {
 
 export default function VendorsPage() {
   const [rows, setRows] = useState<Vendor[]>([]);
+  const [loadErr, setLoadErr] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("");
   const [st, setSt] = useState("");
 
   useEffect(() => {
     void fetch(apiUrl("/api/v1/vendors"))
-      .then((r) => r.json())
-      .then(setRows);
+      .then(async (r) => {
+        const data = await readResponseBodyJson<Vendor[]>(r);
+        if (data !== null && Array.isArray(data)) {
+          setRows(data);
+          setLoadErr(null);
+          return;
+        }
+        setRows([]);
+        setLoadErr(
+          r.status >= 502
+            ? "Directory is temporarily unavailable. Please refresh in a moment."
+            : "Could not load vendors.",
+        );
+      })
+      .catch(() => {
+        setRows([]);
+        setLoadErr("Could not load vendors.");
+      });
   }, []);
 
   const filtered = useMemo(() => {
@@ -92,6 +109,7 @@ export default function VendorsPage() {
           <Input value={st} onChange={(e) => setSt(e.target.value)} maxLength={2} placeholder="CA" className="mt-1" />
         </div>
       </div>
+      {loadErr ? <p className="mt-6 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">{loadErr}</p> : null}
       <ul className="mt-10 grid gap-4 sm:grid-cols-2">
         {filtered.map((v) => (
           <li key={v.id} className="overflow-hidden rounded-xl border border-black/10 bg-white shadow-sm">

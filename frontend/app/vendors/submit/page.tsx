@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { apiUrl } from "@/lib/api";
+import { readResponseBodyJson } from "@/lib/api";
+import { useCurrentUser } from "@/lib/use-current-user";
 
 const CATEGORIES: { value: string; label: string }[] = [
   { value: "jewelry", label: "Jewelry" },
@@ -22,6 +23,9 @@ export default function VendorSubmitPage() {
   const [msg, setMsg] = useState("");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [bannerUrl, setBannerUrl] = useState<string | null>(null);
+  const { user, loading } = useCurrentUser();
+  const isAuthed = !!user;
+
   return (
     <div className="mx-auto max-w-xl px-4 py-10 sm:px-6">
       <h1 className="text-2xl font-bold">Submit your vendor profile</h1>
@@ -29,6 +33,11 @@ export default function VendorSubmitPage() {
         Add one link where you sell online and one where you sell in person (both optional). You can add more links
         later by requesting an update. Profiles are reviewed before going live.
       </p>
+      {isAuthed && (
+        <p className="mt-3 rounded-md bg-[var(--vrr-cream)] px-3 py-2 text-sm">
+          Signed in as <strong>{user.email}</strong>. This profile will be linked to your account.
+        </p>
+      )}
       <form
         className="mt-6 space-y-4"
         onSubmit={async (e) => {
@@ -39,7 +48,7 @@ export default function VendorSubmitPage() {
           const inPerson = String(fd.get("shop_inperson_url") || "").trim();
           if (online) shop_links.push({ label: "Shop online", url: online });
           if (inPerson) shop_links.push({ label: "Shop in person", url: inPerson });
-          const body = {
+          const body: Record<string, unknown> = {
             brand_name: fd.get("brand_name"),
             category: fd.get("category"),
             city: fd.get("city"),
@@ -48,15 +57,26 @@ export default function VendorSubmitPage() {
             shop_links,
             logo_url: logoUrl,
             banner_url: bannerUrl,
-            submitted_email: fd.get("submitted_email"),
             hcaptcha_token: null,
           };
-          const r = await fetch(apiUrl("/api/v1/vendors"), {
+          if (!isAuthed) {
+            body.submitted_email = fd.get("submitted_email");
+          }
+          const r = await fetch("/api/bff/v1/vendors", {
             method: "POST",
+            credentials: "include",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),
           });
-          const data = await r.json();
+          const data = await readResponseBodyJson<{ detail?: string }>(r);
+          if (data === null) {
+            setMsg(
+              r.status >= 502
+                ? "Service temporarily unavailable. Please try again in a few minutes."
+                : "Could not submit. Please try again.",
+            );
+            return;
+          }
           setMsg(r.ok ? "Received — pending review." : data.detail || "Error");
         }}
       >
@@ -94,10 +114,12 @@ export default function VendorSubmitPage() {
           <VendorImageUpload kind="logo" value={logoUrl} onChange={setLogoUrl} />
           <VendorImageUpload kind="banner" value={bannerUrl} onChange={setBannerUrl} />
         </div>
-        <div>
-          <Label htmlFor="submitted_email">Your email (for updates)</Label>
-          <Input id="submitted_email" name="submitted_email" type="email" required className="mt-1" />
-        </div>
+        {!isAuthed && !loading && (
+          <div>
+            <Label htmlFor="submitted_email">Your email (for updates)</Label>
+            <Input id="submitted_email" name="submitted_email" type="email" required className="mt-1" />
+          </div>
+        )}
         <div className="rounded-lg border border-black/10 bg-black/[0.02] p-4 space-y-4">
           <p className="text-sm font-medium text-black/80">Where customers can find you</p>
           <div>

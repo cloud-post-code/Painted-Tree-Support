@@ -2,15 +2,17 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { readResponseBodyJson } from "@/lib/api";
 
 type Row = { id: number; status: string; brand_or_space_name: string };
 
 export default function AdminListingsPage() {
   const [rows, setRows] = useState<Row[]>([]);
   const load = useCallback(() => {
-    void fetch("/api/bff/v1/admin/manage/listings?status=pending", { credentials: "include" })
-      .then((r) => r.json())
-      .then(setRows);
+    void fetch("/api/bff/v1/admin/manage/listings?status=pending", { credentials: "include" }).then(async (r) => {
+      const j = await readResponseBodyJson<Row[]>(r);
+      if (Array.isArray(j)) setRows(j);
+    });
   }, []);
 
   useEffect(() => {

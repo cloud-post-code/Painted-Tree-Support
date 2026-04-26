@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.deps import OptionalUser
 from app.limiter import limiter
 from app.models.listing import Listing
 from app.services.captcha import verify_hcaptcha
@@ -21,7 +22,7 @@ class ListingCreate(BaseModel):
     cost_tier: str = Field(pattern="^(free|reduced|market)$")
     availability_text: str
     contact_phone: str | None = Field(None, max_length=64)
-    contact_email: EmailStr
+    contact_email: EmailStr | None = None
     description: str | None = None
     hcaptcha_token: str | None = None
 
@@ -60,12 +61,19 @@ def _listing_public(r: Listing) -> dict:
 async def create_listing(
     request: Request,
     body: ListingCreate,
+    user: OptionalUser,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     from app.core.config import get_settings
 
     settings = get_settings()
-    domain = str(body.contact_email).split("@")[-1].lower()
+    if user:
+        contact_email = user.email
+    elif body.contact_email:
+        contact_email = str(body.contact_email)
+    else:
+        raise HTTPException(status_code=400, detail="contact_email is required")
+    domain = contact_email.split("@")[-1].lower()
     if domain in settings.blocked_email_domains:
         raise HTTPException(status_code=400, detail="Invalid email")
     if not await verify_hcaptcha(body.hcaptcha_token, request.client.host if request.client else None):
@@ -79,9 +87,10 @@ async def create_listing(
         cost_tier=body.cost_tier,
         availability_text=body.availability_text,
         contact_phone=phone[:64] if phone else None,
-        contact_email=str(body.contact_email),
+        contact_email=contact_email,
         description=body.description,
         status="pending",
+        user_id=user.id if user else None,
     )
     db.add(row)
     await db.commit()

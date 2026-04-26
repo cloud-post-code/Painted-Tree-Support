@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 
 const nav = [
   { href: "/admin", label: "Overview" },
+  { href: "/admin/users", label: "Users" },
+  { href: "/admin/blasts", label: "Message blasts" },
   { href: "/admin/announcements", label: "Announcements" },
   { href: "/admin/resources", label: "Resources" },
   { href: "/admin/guides", label: "Guides" },

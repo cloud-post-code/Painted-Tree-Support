@@ -5,7 +5,7 @@ import Cropper, { type Area } from "react-easy-crop";
 import "react-easy-crop/react-easy-crop.css";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { apiUrl, resolveMediaUrl } from "@/lib/api";
+import { apiUrl, readResponseBodyJson, resolveMediaUrl } from "@/lib/api";
 import { getCroppedImgAsJpeg } from "@/lib/cropImage";
 import { cn } from "@/lib/utils";
 
@@ -85,7 +85,12 @@ export function VendorImageUpload({ kind, value, onChange }: Props) {
         method: "POST",
         body: fd,
       });
-      const data = (await r.json()) as { url?: string; detail?: unknown };
+      const data = await readResponseBodyJson<{ url?: string; detail?: unknown }>(r);
+      if (data === null) {
+        setErr(r.status >= 502 ? "Service temporarily unavailable. Try again shortly." : "Upload failed");
+        setBusy(false);
+        return;
+      }
       if (!r.ok) {
         const d = data.detail;
         setErr(typeof d === "string" ? d : "Upload failed");

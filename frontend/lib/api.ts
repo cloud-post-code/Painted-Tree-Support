@@ -1,6 +1,45 @@
+const _DEBUG_INGEST = "http://127.0.0.1:7764/ingest/615fd78e-be81-4ea3-9929-0678e6a94e41";
+
 function sameOriginApi(): boolean {
   const v = process.env.NEXT_PUBLIC_API_URL;
   return v === "same" || v === "";
+}
+
+/**
+ * Parse JSON from a fetch Response without throwing when the body is HTML
+ * (e.g. nginx/Railway 502 pages). Returns null if the body is not JSON.
+ */
+export async function readResponseBodyJson<T = unknown>(r: Response): Promise<T | null> {
+  const text = await r.text();
+  const trimmed = text.trimStart();
+  const looksJson = trimmed.startsWith("{") || trimmed.startsWith("[");
+  // #region agent log
+  if (typeof fetch !== "undefined") {
+    void fetch(_DEBUG_INGEST, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "e58857" },
+      body: JSON.stringify({
+        sessionId: "e58857",
+        location: "lib/api.ts:readResponseBodyJson",
+        message: "response shape",
+        data: {
+          ok: r.ok,
+          status: r.status,
+          looksJson,
+          prefix: trimmed.slice(0, 48),
+        },
+        timestamp: Date.now(),
+        hypothesisId: r.status >= 502 ? "H1" : "H2",
+      }),
+    }).catch(() => {});
+  }
+  // #endregion
+  if (!looksJson) return null;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
 }
 
 /** Base URL for server-side routes (BFF, auth) to reach FastAPI. */
@@ -49,11 +88,15 @@ export async function apiGet<T>(path: string, init?: RequestInit): Promise<T> {
     next: { revalidate: 60 },
   });
   if (!r.ok) throw new Error(`GET ${path} ${r.status}`);
-  return r.json() as Promise<T>;
+  const data = await readResponseBodyJson<T>(r);
+  if (data === null) throw new Error(`GET ${path}: expected JSON`);
+  return data;
 }
 
 export async function apiGetNoStore<T>(path: string): Promise<T> {
   const r = await fetch(apiUrl(path), { cache: "no-store" });
   if (!r.ok) throw new Error(`GET ${path} ${r.status}`);
-  return r.json() as Promise<T>;
+  const data = await readResponseBodyJson<T>(r);
+  if (data === null) throw new Error(`GET ${path}: expected JSON`);
+  return data;
 }

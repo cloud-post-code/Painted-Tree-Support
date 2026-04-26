@@ -1,17 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { readResponseBodyJson } from "@/lib/api";
 
 export default function AdminLegalPage() {
   const [articles, setArticles] = useState<unknown[]>([]);
   const [orgs, setOrgs] = useState<unknown[]>([]);
   useEffect(() => {
-    void fetch("/api/bff/v1/admin/manage/legal/articles", { credentials: "include" })
-      .then((r) => r.json())
-      .then(setArticles);
-    void fetch("/api/bff/v1/admin/manage/legal/orgs", { credentials: "include" })
-      .then((r) => r.json())
-      .then(setOrgs);
+    void fetch("/api/bff/v1/admin/manage/legal/articles", { credentials: "include" }).then(async (r) => {
+      const j = await readResponseBodyJson<unknown[]>(r);
+      if (Array.isArray(j)) setArticles(j);
+    });
+    void fetch("/api/bff/v1/admin/manage/legal/orgs", { credentials: "include" }).then(async (r) => {
+      const j = await readResponseBodyJson<unknown[]>(r);
+      if (Array.isArray(j)) setOrgs(j);
+    });
   }, []);
   return (
     <div className="space-y-8">

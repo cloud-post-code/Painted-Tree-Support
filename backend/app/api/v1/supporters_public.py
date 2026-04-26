@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.db.session import get_db
+from app.deps import OptionalUser
 from app.limiter import limiter
 from app.models.service_offer import ServiceOffer
 from app.models.space_offer import SpaceOffer
@@ -21,7 +22,7 @@ class SpaceOfferCreate(BaseModel):
     cost_tier: str = Field(pattern="^(free|reduced|market)$")
     availability_text: str
     contact_phone: str | None = Field(None, max_length=64)
-    contact_email: EmailStr
+    contact_email: EmailStr | None = None
     description: str | None = None
     hcaptcha_token: str | None = None
 
@@ -31,14 +32,14 @@ class ServiceOfferCreate(BaseModel):
     availability: str
     cost_tier: str = Field(pattern="^(pro_bono|reduced|paid)$")
     contact_phone: str | None = Field(None, max_length=64)
-    contact_email: EmailStr
+    contact_email: EmailStr | None = None
     description: str | None = None
     hcaptcha_token: str | None = None
 
 
 class VolunteerCreate(BaseModel):
     name: str
-    email: EmailStr
+    email: EmailStr | None = None
     skills: list[str] = Field(default_factory=list)
     availability: str
     areas_of_interest: str
@@ -47,9 +48,20 @@ class VolunteerCreate(BaseModel):
 
 @router.post("/space")
 @limiter.limit("30/minute")
-async def post_space(request: Request, body: SpaceOfferCreate, db: AsyncSession = Depends(get_db)) -> dict:
+async def post_space(
+    request: Request,
+    body: SpaceOfferCreate,
+    user: OptionalUser,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
     settings = get_settings()
-    domain = str(body.contact_email).split("@")[-1].lower()
+    if user:
+        contact_email = user.email
+    elif body.contact_email:
+        contact_email = str(body.contact_email)
+    else:
+        raise HTTPException(status_code=400, detail="contact_email is required")
+    domain = contact_email.split("@")[-1].lower()
     if domain in settings.blocked_email_domains:
         raise HTTPException(status_code=400, detail="Invalid email")
     if not await verify_hcaptcha(body.hcaptcha_token, request.client.host if request.client else None):
@@ -62,9 +74,10 @@ async def post_space(request: Request, body: SpaceOfferCreate, db: AsyncSession 
         cost_tier=body.cost_tier,
         availability_text=body.availability_text,
         contact_phone=phone[:64] if phone else None,
-        contact_email=str(body.contact_email),
+        contact_email=contact_email,
         description=body.description,
         status="pending",
+        user_id=user.id if user else None,
     )
     db.add(row)
     await db.commit()
@@ -74,9 +87,20 @@ async def post_space(request: Request, body: SpaceOfferCreate, db: AsyncSession 
 
 @router.post("/services")
 @limiter.limit("30/minute")
-async def post_services(request: Request, body: ServiceOfferCreate, db: AsyncSession = Depends(get_db)) -> dict:
+async def post_services(
+    request: Request,
+    body: ServiceOfferCreate,
+    user: OptionalUser,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
     settings = get_settings()
-    domain = str(body.contact_email).split("@")[-1].lower()
+    if user:
+        contact_email = user.email
+    elif body.contact_email:
+        contact_email = str(body.contact_email)
+    else:
+        raise HTTPException(status_code=400, detail="contact_email is required")
+    domain = contact_email.split("@")[-1].lower()
     if domain in settings.blocked_email_domains:
         raise HTTPException(status_code=400, detail="Invalid email")
     if not await verify_hcaptcha(body.hcaptcha_token, request.client.host if request.client else None):
@@ -87,9 +111,10 @@ async def post_services(request: Request, body: ServiceOfferCreate, db: AsyncSes
         availability=body.availability,
         cost_tier=body.cost_tier,
         contact_phone=phone[:64] if phone else None,
-        contact_email=str(body.contact_email),
+        contact_email=contact_email,
         description=body.description,
         status="pending",
+        user_id=user.id if user else None,
     )
     db.add(row)
     await db.commit()
@@ -99,20 +124,32 @@ async def post_services(request: Request, body: ServiceOfferCreate, db: AsyncSes
 
 @router.post("/volunteer")
 @limiter.limit("30/minute")
-async def post_volunteer(request: Request, body: VolunteerCreate, db: AsyncSession = Depends(get_db)) -> dict:
+async def post_volunteer(
+    request: Request,
+    body: VolunteerCreate,
+    user: OptionalUser,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
     settings = get_settings()
-    domain = str(body.email).split("@")[-1].lower()
+    if user:
+        email = user.email
+    elif body.email:
+        email = str(body.email)
+    else:
+        raise HTTPException(status_code=400, detail="email is required")
+    domain = email.split("@")[-1].lower()
     if domain in settings.blocked_email_domains:
         raise HTTPException(status_code=400, detail="Invalid email")
     if not await verify_hcaptcha(body.hcaptcha_token, request.client.host if request.client else None):
         raise HTTPException(status_code=400, detail="Captcha failed")
     row = Volunteer(
         name=body.name,
-        email=str(body.email),
+        email=email,
         skills=body.skills,
         availability=body.availability,
         areas_of_interest=body.areas_of_interest,
         status="pending",
+        user_id=user.id if user else None,
     )
     db.add(row)
     await db.commit()

@@ -6,7 +6,18 @@ export API_INTERNAL_URL="${API_INTERNAL_URL:-http://127.0.0.1:8000}"
 sed "s/__PORT__/${PORT}/g" /etc/nginx/nginx.conf.template >/tmp/nginx.conf
 
 cd /app/backend
-APP_HOST=127.0.0.1 APP_PORT=8000 sh scripts/start_with_migrations.sh &
+echo "railway: running migrations before API (see logs if this fails)…" >&2
+if ! sh scripts/migrate_retry.sh; then
+  echo "railway: DATABASE_URL / Postgres unreachable or migrations invalid — fix env and redeploy." >&2
+  exit 1
+fi
+echo "railway: starting uvicorn…" >&2
+python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8000 &
+sleep 1
+if ! kill -0 "$!" 2>/dev/null; then
+  echo "railway: uvicorn exited immediately after start" >&2
+  exit 1
+fi
 
 WEB_HOME=/app/web
 if [ ! -f "$WEB_HOME/server.js" ]; then

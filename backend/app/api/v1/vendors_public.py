@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.db.session import get_db
+from app.deps import OptionalUser
 from app.limiter import limiter
 from app.models.vendor import Vendor
 from app.services.captcha import verify_hcaptcha
@@ -32,7 +33,7 @@ class VendorCreate(BaseModel):
     shop_links: list[ShopLink] = Field(default_factory=list, max_length=4)
     logo_url: str | None = Field(None, max_length=2048)
     banner_url: str | None = Field(None, max_length=2048)
-    submitted_email: EmailStr
+    submitted_email: EmailStr | None = None
     hcaptcha_token: str | None = None
 
 
@@ -147,9 +148,20 @@ async def get_vendor(vendor_id: int, db: AsyncSession = Depends(get_db)) -> dict
 
 @router.post("")
 @limiter.limit("30/minute")
-async def create_vendor(request: Request, body: VendorCreate, db: AsyncSession = Depends(get_db)) -> dict:
+async def create_vendor(
+    request: Request,
+    body: VendorCreate,
+    user: OptionalUser,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
     settings = get_settings()
-    domain = str(body.submitted_email).split("@")[-1].lower()
+    if user:
+        submitted_email = user.email
+    elif body.submitted_email:
+        submitted_email = str(body.submitted_email)
+    else:
+        raise HTTPException(status_code=400, detail="submitted_email is required")
+    domain = submitted_email.split("@")[-1].lower()
     if domain in settings.blocked_email_domains:
         raise HTTPException(status_code=400, detail="Invalid email")
     if not await verify_hcaptcha(body.hcaptcha_token, request.client.host if request.client else None):
@@ -166,8 +178,9 @@ async def create_vendor(request: Request, body: VendorCreate, db: AsyncSession =
         shop_links=links,
         logo_url=logo,
         banner_url=banner,
-        submitted_email=str(body.submitted_email),
+        submitted_email=submitted_email,
         status="pending",
+        user_id=user.id if user else None,
     )
     db.add(row)
     await db.commit()

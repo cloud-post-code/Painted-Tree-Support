@@ -6,6 +6,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { readResponseBodyJson } from "@/lib/api";
 
 type Row = {
   id: number;
@@ -20,9 +21,10 @@ export default function AdminVendorsPage() {
   const [q, setQ] = useState("");
 
   const load = useCallback(() => {
-    void fetch("/api/bff/v1/admin/manage/vendors", { credentials: "include" })
-      .then((r) => r.json())
-      .then(setRows);
+    void fetch("/api/bff/v1/admin/manage/vendors", { credentials: "include" }).then(async (r) => {
+      const j = await readResponseBodyJson<Row[]>(r);
+      if (Array.isArray(j)) setRows(j);
+    });
   }, []);
 
   useEffect(() => {

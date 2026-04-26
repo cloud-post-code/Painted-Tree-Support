@@ -1,5 +1,4 @@
 from app.db.base import Base
-from app.models.admin_user import AdminUser
 from app.models.announcement import Announcement
 from app.models.community import CommunityLink
 from app.models.donation import Donation
@@ -8,6 +7,7 @@ from app.models.emergency_cash import EmergencyCashOption
 from app.models.guide import Guide
 from app.models.legal import LegalArticle, LegalOrg
 from app.models.listing import Listing
+from app.models.message_blast import MessageBlast, MessageBlastRecipient
 from app.models.resource import Resource
 from app.models.service_offer import ServiceOffer
 from app.models.site_counter import SiteCounter
@@ -15,12 +15,12 @@ from app.models.site_setting import SiteSetting
 from app.models.space_offer import SpaceOffer
 from app.models.template import Template
 from app.models.triage import TriageStep
+from app.models.user import User
 from app.models.vendor import Vendor
 from app.models.volunteer import Volunteer
 
 __all__ = [
     "Base",
-    "AdminUser",
     "Announcement",
     "CommunityLink",
     "Donation",
@@ -30,6 +30,8 @@ __all__ = [
     "LegalArticle",
     "LegalOrg",
     "Listing",
+    "MessageBlast",
+    "MessageBlastRecipient",
     "Resource",
     "ServiceOffer",
     "SiteCounter",
@@ -37,6 +39,7 @@ __all__ = [
     "SpaceOffer",
     "Template",
     "TriageStep",
+    "User",
     "Vendor",
     "Volunteer",
 ]

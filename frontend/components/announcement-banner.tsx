@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, readResponseBodyJson } from "@/lib/api";
 
 type Ann = { id: number; body: string; link_url?: string | null; link_text?: string | null; dismissible: boolean };
 
@@ -22,8 +22,10 @@ export function AnnouncementBanner() {
       }
     }
     fetch(apiUrl("/api/v1/announcements/active"))
-      .then((r) => r.json())
-      .then((d: Ann[]) => setItems(Array.isArray(d) ? d : []))
+      .then(async (r) => {
+        const d = await readResponseBodyJson<Ann[]>(r);
+        setItems(Array.isArray(d) ? d : []);
+      })
       .catch(() => setItems([]));
   }, []);
 
