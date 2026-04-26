@@ -21,11 +21,10 @@ export const metadata: Metadata = {
     default: "Project Re-Paint",
     template: "%s | Project Re-Paint",
   },
-  description:
-    "Lost your booth? Start here. Crisis-to-comeback guidance and community for displaced vendors.",
+  description: "April showers bring May flowers.",
   openGraph: {
     title: "Project Re-Paint",
-    description: "Crisis-to-comeback platform for displaced vendors.",
+    description: "April showers bring May flowers.",
     type: "website",
   },
 };
