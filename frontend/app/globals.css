@@ -1,16 +1,21 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
+/* Brand palette (tree logo): grey #6d6e71 / #58595b, cyan #00aeef, lime #a1ce3d, yellow #ffcc33, rose #c1647a, pink #ebacc1 */
 :root {
-  --background: #faf8f5;
-  --foreground: #1a1a1a;
-  --vrr-cream: #faf8f5;
-  --vrr-cream-dark: #f0ebe3;
-  --vrr-teal: #0d6b6b;
-  --vrr-teal-dark: #094d4d;
-  --vrr-ink: #1a1a1a;
-  --vrr-gold: #c9a227;
-  --vrr-coral: #e85d4c;
+  --background: #f0f1f2;
+  --foreground: #58595b;
+  --vrr-cream: #f0f1f2;
+  --vrr-cream-dark: #e2e3e5;
+  /* #00aeef at full strength is used implicitly via hue; UI fills use a darker cyan for white-text contrast */
+  --vrr-teal: #0088b0;
+  --vrr-teal-dark: #006f90;
+  --vrr-ink: #58595b;
+  --vrr-gold: #ffcc33;
+  --vrr-coral: #c1647a;
+  --vrr-lime: #a1ce3d;
+  --vrr-pink: #ebacc1;
+  --vrr-stone: #6d6e71;
 }
 
 @theme inline {

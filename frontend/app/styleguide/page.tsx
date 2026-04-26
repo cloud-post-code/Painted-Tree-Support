@@ -14,7 +14,7 @@ export default function StyleguidePage() {
         <CardHeader>
           <CardTitle>Card</CardTitle>
         </CardHeader>
-        <CardContent>Breakpoints: 375 / 768 / 1280. Colors: cream, teal, ink, gold.</CardContent>
+        <CardContent>Breakpoints: 375 / 768 / 1280. Colors: cool grey surfaces, charcoal ink, cyan primary, yellow accent, rose secondary.</CardContent>
       </Card>
     </div>
   );
