@@ -14,7 +14,7 @@ Railway can run this repo in two ways:
 1. **New project** → **Deploy from GitHub** → select this repo (leave **Root directory** empty).
 2. Add the **Postgres** plugin and reference `DATABASE_URL` on the same service (or paste the async URL).
 
-Railway will build with **Dockerfile** and start nginx on **`$PORT`**, which proxies:
+The all-in-one **entrypoint** runs `alembic upgrade head` in `/app/backend` before starting the API, so the database schema is applied on every deploy. Railway will build with **Dockerfile** and start nginx on **`$PORT`**, which proxies:
 
 - `/api/v1/*`, `/static/*`, `/docs`, `/openapi.json`, `/redoc` → FastAPI on `127.0.0.1:8000`
 - everything else → Next.js standalone on `127.0.0.1:3000`
@@ -39,7 +39,7 @@ Optional: override Dockerfile build args in Railway if you need a specific site 
 
 ### After first deploy
 
-**Migrations** (from your machine, with the CLI linked to this all-in-one service):
+**Migrations** run automatically in the entrypoint. If you need to run them manually (troubleshooting, stuck revision, or before the API is up), from your machine with the CLI linked to this all-in-one service:
 
 ```bash
 railway run sh -c 'cd /app/backend && alembic upgrade head'
@@ -63,6 +63,8 @@ The running image keeps Alembic and `alembic.ini` under `/app/backend`.
 | `web` | `frontend/` | `/frontend/railway.json` |
 
 For an [isolated monorepo](https://docs.railway.com/deployments/monorepo), the config file path is from the **repository root**, not from the service root.
+
+The split **`api`** service start command in [`backend/railway.json`](../backend/railway.json) runs `alembic upgrade head` before `uvicorn`, so schema updates apply on each deploy from the `backend/` service root.
 
 ### `api` variables
 
@@ -88,6 +90,8 @@ If Railway provides `postgres://user:pass@host:port/db`, convert to:
 - All-in-one: `/` (root `railway.json`)
 
 ### Migrations (split)
+
+Migrations run automatically at API startup. To run or retry manually (e.g. debugging):
 
 ```bash
 railway run --service api alembic upgrade head

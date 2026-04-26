@@ -1,4 +1,4 @@
-.PHONY: dev dev-api dev-web lint test install install-backend install-frontend
+.PHONY: dev dev-api dev-web db-migrate lint test install install-backend install-frontend
 
 install: install-backend install-frontend
 
@@ -10,6 +10,9 @@ install-frontend:
 
 dev:
 	@echo "Run in two terminals: make dev-api   and   make dev-web"
+
+db-migrate:
+	cd backend && python3 -m alembic upgrade head
 
 dev-api:
 	cd backend && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
