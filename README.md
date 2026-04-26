@@ -33,6 +33,7 @@ make dev
 |------------------|--------------------------------------|
 | `make dev`       | Run API + web (requires two terminals or use `make dev-api` / `make dev-web`) |
 | `make db-migrate`| Apply Alembic migrations (Postgres must be up; required before admin works end-to-end) |
+| `make seed-admin`| Create first admin from `ADMIN_SEED_EMAIL` / `ADMIN_SEED_PASSWORD` (or pass `--upsert` via script; see `backend/scripts/seed_admin.py`) |
 | `make lint`      | Lint backend (ruff) + frontend (eslint) |
 | `make test`      | pytest + vitest                      |
 
@@ -46,11 +47,21 @@ Details, env tables, migrations, and bootstrap: [docs/RAILWAY.md](docs/RAILWAY.m
 
 ## Bootstrap admin
 
+**Option A — HTTP (one-time, needs `ADMIN_BOOTSTRAP_TOKEN`):**
+
 ```bash
 curl -X POST http://localhost:8000/api/v1/admin/seed-first-user \
   -H "Content-Type: application/json" \
   -H "X-Admin-Bootstrap-Token: YOUR_ADMIN_BOOTSTRAP_TOKEN" \
   -d '{"email":"admin@example.com","password":"change-me-now"}'
 ```
+
+**Option B — script (good for Railway / CI):** set `ADMIN_SEED_EMAIL` and `ADMIN_SEED_PASSWORD` in `backend/.env`, then:
+
+```bash
+make seed-admin
+```
+
+Use `cd backend && PYTHONPATH=. python scripts/seed_admin.py --upsert` to create or reset a specific admin when one already exists.
 
 Then sign in at `/admin/login`.

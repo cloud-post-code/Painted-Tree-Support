@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -10,7 +11,21 @@ class Settings(BaseSettings):
     app_name: str = "Project Re-Paint API"
     api_v1_prefix: str = "/api/v1"
 
-    database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/vrr"
+    database_url: str = Field(
+        default="postgresql+asyncpg://postgres:postgres@localhost:5432/vrr",
+        validation_alias=AliasChoices("DATABASE_URL", "DATABAASE_URL"),
+    )
+
+    @model_validator(mode="after")
+    def coerce_database_url_for_asyncpg(self) -> "Settings":
+        u = self.database_url
+        if u.startswith("postgresql+asyncpg://"):
+            return self
+        if u.startswith("postgres://"):
+            self.database_url = u.replace("postgres://", "postgresql+asyncpg://", 1)
+        elif u.startswith("postgresql://"):
+            self.database_url = u.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return self
 
     secret_key: str = "change-me"
     access_token_expire_minutes: int = 60 * 24 * 30
