@@ -224,6 +224,12 @@ async def main() -> None:
         if not (await db.execute(select(CommunityLink).limit(1))).scalar_one_or_none():
             db.add_all(
                 [
+                    CommunityLink(
+                        name="Painted Tree Facebook group",
+                        channel_url="https://www.facebook.com/groups/1482251463621586",
+                        description="~3.7K members — community voices, resources, and information",
+                        sort_order=0,
+                    ),
                     CommunityLink(name="#general", channel_url="https://discord.gg/example", sort_order=1),
                     CommunityLink(name="#inventory-recovery", channel_url="https://discord.gg/example", sort_order=2),
                 ]
