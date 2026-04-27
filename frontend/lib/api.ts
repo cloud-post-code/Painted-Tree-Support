@@ -53,9 +53,16 @@ export function apiUrl(path: string): string {
 
 /** Use for vendor (or other) media stored as `/static/...` on the API host. */
 export function resolveMediaUrl(pathOrUrl: string | null | undefined): string | null {
-  if (!pathOrUrl) return null;
-  if (pathOrUrl.startsWith("http://") || pathOrUrl.startsWith("https://")) return pathOrUrl;
-  const p = pathOrUrl.startsWith("/") ? pathOrUrl : `/${pathOrUrl}`;
+  const raw = pathOrUrl == null ? "" : String(pathOrUrl).trim();
+  if (!raw) return null;
+  if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
+  if (raw.startsWith("//")) {
+    if (typeof window !== "undefined") {
+      return `${window.location.protocol}${raw}`;
+    }
+    return `https:${raw}`;
+  }
+  const p = raw.startsWith("/") ? raw : `/${raw}`;
   return apiUrl(p);
 }
 

@@ -16,7 +16,7 @@ import {
   UtensilsCrossed,
   Wrench,
 } from "lucide-react";
-import { apiUrl, readResponseBodyJson } from "@/lib/api";
+import { apiUrl, readResponseBodyJson, resolveMediaUrl } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -80,8 +80,8 @@ function ListingBoardCard({ listing, showCostTier }: { listing: Listing; showCos
   const [heroBroken, setHeroBroken] = useState(false);
   const CatIcon = categoryLucide(listing.category);
   const TypeIcon = typeLucide(listing.type);
-  const hero =
-    listing.hero_image_url && !heroBroken ? listing.hero_image_url : null;
+  const heroRaw = listing.hero_image_url && !heroBroken ? listing.hero_image_url : null;
+  const hero = heroRaw ? resolveMediaUrl(heroRaw) : null;
   const tier = COST_LABELS[listing.cost_tier] || listing.cost_tier;
   const catLabel = CATEGORY_LABELS[listing.category || "general"] || listing.category || "General";
   const typeLabel = listing.type === "booth_offer" ? "Space available" : "Seeking space";

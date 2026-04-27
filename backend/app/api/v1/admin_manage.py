@@ -823,6 +823,11 @@ def _vendor_csv_merge_marketplace_aliases(nr: dict[str, str]) -> None:
         if ph:
             nr["phone"] = ph
 
+    if not _csv_first_value(nr, "pt_listing_id"):
+        lid = _csv_first_value(nr, "listing_id", "sell_now_listing_id")
+        if lid:
+            nr["pt_listing_id"] = lid
+
 
 def _vendor_csv_category(val: str) -> str:
     s = (val or "").strip()
@@ -853,6 +858,43 @@ def _vendor_csv_truthy(val: str) -> bool:
     return (val or "").lower() in ("1", "true", "yes", "y")
 
 
+def _vendor_csv_product_listing_hero(
+    nr: dict[str, str],
+    banner_url: str | None,
+    logo_url: str | None,
+) -> str | None:
+    """Sell-Now board card image: explicit hero, else share/OG, else vendor banner, else logo."""
+    h = _csv_first_value(nr, "hero_image", "hero") or _csv_first_value(
+        nr, "share_image", "share_url", "og_image", "social_image"
+    )
+    if h:
+        return h[:2048]
+    b = (banner_url or "").strip()
+    if b:
+        return b[:2048]
+    lo = (logo_url or "").strip()
+    if lo:
+        return lo[:2048]
+    return None
+
+
+async def _sync_listing_from_vendor_csv_row(db: AsyncSession, *, nr: dict[str, str], fields: dict) -> None:
+    """When CSV includes ``pt_listing_id`` / ``listing_id``, push product-style columns to that listing row."""
+    pt = fields.get("pt_listing_id")
+    if not isinstance(pt, int) or pt < 1:
+        return
+    row = (await db.execute(select(Listing).where(Listing.id == pt))).scalar_one_or_none()
+    if row is None:
+        return
+    row.brand_or_space_name = str(fields.get("brand_name") or "")[:512]
+    desc = fields.get("description_full")
+    row.description = desc if isinstance(desc, str) else None
+    cat = (fields.get("category") or "general").strip() or "general"
+    row.category = cat[:64]
+    hero = _vendor_csv_product_listing_hero(nr, fields.get("banner_url"), fields.get("logo_url"))
+    row.hero_image_url = hero[:2048] if hero else None
+
+
 @router.post("/vendors/import-csv")
 async def admin_import_vendors_csv(
     admin: CurrentAdmin,
@@ -878,7 +920,10 @@ async def admin_import_vendors_csv(
     ``hero_image`` (with ``share_image`` / ``share_url`` / ``og_image`` used when ``hero_image`` is empty),
     ``status`` (default ``published``), ``featured``,
     ``pt_category_names`` / ``tags`` (``|`` or ``,``-separated), ``pt_current_locations``, ``pt_previous_locations``,
-    ``pt_listing_id``,
+    ``pt_listing_id`` / ``listing_id`` / ``sell_now_listing_id`` (optional): when set to a published Sell-Now
+    ``listings.id``, the same row updates that listing's card (name, description, category, ``hero_image_url``).
+    Card hero uses ``hero_image`` then ``share_image``; if both absent, uses vendor ``banner_url`` then ``logo_url``.
+
     ``id`` (when ``refresh`` is true, update this vendor by id instead of insert).
 
     If ``submitted_email`` and ``contact_email`` are both empty, a placeholder ``@invalid`` address is used.
@@ -978,6 +1023,7 @@ async def admin_import_vendors_csv(
                 for k, v in fields.items():
                     setattr(existing, k, v)
                 updated += 1
+                await _sync_listing_from_vendor_csv_row(db, nr=nr, fields=fields)
             elif existing is None and not refresh:
                 dup = (
                     await db.execute(select(Vendor).where(func.lower(Vendor.brand_name) == brand.lower()))
@@ -987,9 +1033,11 @@ async def admin_import_vendors_csv(
                     continue
                 db.add(Vendor(**fields))
                 created += 1
+                await _sync_listing_from_vendor_csv_row(db, nr=nr, fields=fields)
             elif existing is None and refresh:
                 db.add(Vendor(**fields))
                 created += 1
+                await _sync_listing_from_vendor_csv_row(db, nr=nr, fields=fields)
         except Exception as e:  # noqa: BLE001 — per-row import resilience
             errors.append(f"Line {line_no}: {e}")
             skipped += 1

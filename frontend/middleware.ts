@@ -9,7 +9,15 @@ function rewriteToRemoteApi(request: NextRequest): NextResponse | null {
 
   const internal = (process.env.API_INTERNAL_URL || "").trim().replace(/\/$/, "");
   if (!internal.startsWith("http")) return null;
-  if (/127\.0\.0\.1|localhost/.test(internal)) return null;
+
+  let internalOrigin: URL;
+  try {
+    internalOrigin = new URL(internal.endsWith("/") ? internal : `${internal}/`);
+  } catch {
+    return null;
+  }
+  // Do not rewrite to the same origin as this app (would loop or no-op). Allow localhost:8000 ↔ app on :3000, etc.
+  if (internalOrigin.origin === request.nextUrl.origin) return null;
 
   const { pathname } = request.nextUrl;
   const proxyPaths =
@@ -19,14 +27,6 @@ function rewriteToRemoteApi(request: NextRequest): NextResponse | null {
     pathname.startsWith("/docs") ||
     pathname.startsWith("/redoc");
   if (!proxyPaths) return null;
-
-  let internalOrigin: URL;
-  try {
-    internalOrigin = new URL(internal.endsWith("/") ? internal : `${internal}/`);
-  } catch {
-    return null;
-  }
-  if (internalOrigin.hostname === request.nextUrl.hostname) return null;
 
   try {
     const dest = new URL(pathname + request.nextUrl.search, internalOrigin);

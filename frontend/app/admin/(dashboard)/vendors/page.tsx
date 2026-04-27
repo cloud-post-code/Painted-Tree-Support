@@ -12,9 +12,9 @@ import { readResponseBodyJson } from "@/lib/api";
 const VENDOR_CSV_TEMPLATE = `shop_name,category,tagline,description_full,city,state,postal_code,address_line1,address_line2,phone,fax,contact_name,contact_email,submitted_email,shop_url,shop_inperson_url,logo_url,banner_url,status,featured,pt_category_names,pt_current_locations,pt_previous_locations,pt_listing_id,id
 "Sample Artisan Coop",Gifts,Handmade in New England,Full story for the public profile after approval.,Medford,MA,02155,200 Main St,Suite 12,781-555-0100,,Alex Merchant,hello@shop.example,owner@shop.example,https://medford.4goodvibes.shop/,https://maps.example.com/place,https://images.example.com/logo.jpg,https://images.example.com/banner.jpg,published,false,"Gifts|Home decor","Downtown|Market hall","Riverside studio",,`;
 
-// Compact product-style row: title → brand; description → body; vendor_logo / vendor_banner; hero_image with share_image fallback for banner when vendor_banner is empty
-const VENDOR_CSV_PRODUCT_STYLE_TEMPLATE = `title,description,price,category,quantity,vendor_logo,vendor_banner,hero_image,share_image
-"Sample Maker",Handmade candles and gifts,24.99,Gifts,12,https://images.example.com/logo.jpg,,https://images.example.com/card-hero.jpg,https://images.example.com/og-share.jpg`;
+// Compact product-style row: title → brand; description → body; vendor_logo / vendor_banner; hero_image with share_image fallback for banner when vendor_banner is empty; pt_listing_id links the Sell-Now listing card to update
+const VENDOR_CSV_PRODUCT_STYLE_TEMPLATE = `title,description,price,category,quantity,vendor_logo,vendor_banner,hero_image,share_image,pt_listing_id
+"Sample Maker",Handmade candles and gifts,24.99,Gifts,12,https://images.example.com/logo.jpg,,https://images.example.com/card-hero.jpg,https://images.example.com/og-share.jpg,`;
 
 type ImportResult = {
   created: number;
@@ -190,7 +190,10 @@ export default function AdminVendorsPage() {
           <code className="text-xs">share_image</code> (optional <code className="text-xs">price</code> /{" "}
           <code className="text-xs">quantity</code> are ignored). If <code className="text-xs">vendor_banner</code> is
           empty, the profile banner uses <code className="text-xs">hero_image</code> when set, otherwise{" "}
-          <code className="text-xs">share_image</code>. Layout matches common multi-vendor mall sites such as{" "}
+          <code className="text-xs">share_image</code>. Set <code className="text-xs">pt_listing_id</code> (or{" "}
+          <code className="text-xs">listing_id</code>) to a Sell-Now listing id to update that board card’s title,
+          description, category, and hero image (same hero/share/banner/logo rules). Layout matches common multi-vendor
+          mall sites such as{" "}
           <a
             href="https://medford.4goodvibes.shop/"
             className="font-medium text-[var(--vrr-teal)] underline"
