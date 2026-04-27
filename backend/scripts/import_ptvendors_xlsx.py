@@ -23,6 +23,7 @@ from sqlalchemy import func, select
 
 from app.db.session import AsyncSessionLocal
 from app.models.vendor import Vendor
+from app.services.vendor_product_sync import sync_vendor_legacy_from_product
 
 DEFAULT_XLSX = Path(__file__).resolve().parents[1] / "data" / "pt_vendors.xlsx"
 
@@ -203,17 +204,24 @@ async def main() -> None:
             pt_names = parse_category_names(str(cats_cell) if cats_cell is not None else None)
             curr_list = parse_current_location(curr)
 
+            cat = map_category_from_categories_cell(str(cats_cell) if cats_cell else None)
+            img = norm_url(hero) or norm_url(logo)
             payload = {
+                "product_name": brand,
+                "product_description": desc_full,
+                "product_category": cat,
+                "product_image": img,
+                "product_brand": brand,
                 "brand_name": brand,
-                "category": map_category_from_categories_cell(str(cats_cell) if cats_cell else None),
+                "category": cat,
                 "city": city[:255],
                 "state": state[:8],
                 "bio_150": bio_150_from(desc_full),
                 "description_full": desc_full,
                 "pt_category_names": pt_names,
                 "pt_current_locations": curr_list,
-                "logo_url": norm_url(logo),
-                "banner_url": norm_url(hero),
+                "logo_url": img,
+                "banner_url": img,
                 "pt_previous_locations": prev_list,
                 "shop_links": shop_links(web),
                 "pt_listing_id": None,
@@ -224,6 +232,7 @@ async def main() -> None:
                 if args.refresh and is_xlsx_source_vendor(existing):
                     for k, v in payload.items():
                         setattr(existing, k, v)
+                    sync_vendor_legacy_from_product(existing)
                     if existing.status == "pending":
                         existing.status = "published"
                     updated += 1
@@ -232,6 +241,11 @@ async def main() -> None:
                 continue
 
             v = Vendor(
+                product_name=payload["product_name"],
+                product_description=payload["product_description"],
+                product_category=payload["product_category"],
+                product_image=payload["product_image"],
+                product_brand=payload["product_brand"],
                 brand_name=payload["brand_name"],
                 category=payload["category"],
                 city=payload["city"],
@@ -249,6 +263,7 @@ async def main() -> None:
                 status="published",
                 featured=False,
             )
+            sync_vendor_legacy_from_product(v)
             db.add(v)
             inserted += 1
 

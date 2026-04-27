@@ -14,6 +14,16 @@ class Vendor(Base):
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
     pt_listing_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    # Product sheet (canonical display / survey / CSV)
+    product_name: Mapped[str] = mapped_column(String(255), index=True)
+    product_description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    product_price: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    product_category: Mapped[str] = mapped_column(String(64), index=True, default="other")
+    product_stock: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    product_image: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    product_brand: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    product_rating: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # Legacy mirror fields (kept for indexes, admin SQL, imports); synced from product_* in application code
     brand_name: Mapped[str] = mapped_column(String(255), index=True)
     category: Mapped[str] = mapped_column(String(64), index=True)
     city: Mapped[str | None] = mapped_column(String(255), nullable=True)

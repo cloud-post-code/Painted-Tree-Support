@@ -19,6 +19,7 @@ from sqlalchemy import select
 
 from app.db.session import AsyncSessionLocal
 from app.models.vendor import Vendor
+from app.services.vendor_product_sync import sync_vendor_legacy_from_product
 
 DATA = Path(__file__).resolve().parents[1] / "data" / "ptvendors_listings.json"
 
@@ -215,6 +216,12 @@ def apply_listing_to_vendor(row: Vendor, listing: dict) -> None:
     row.pt_previous_locations = prev_strs if prev_strs else None
     row.shop_links = shop_links_from(listing)
     row.featured = bool(listing.get("is_featured"))
+    row.product_name = row.brand_name
+    row.product_category = row.category
+    row.product_description = row.description_full
+    row.product_image = row.logo_url or row.banner_url
+    row.product_brand = row.brand_name
+    sync_vendor_legacy_from_product(row)
 
 
 async def main() -> None:

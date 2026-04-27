@@ -15,26 +15,19 @@ type ShopLink = { label: string; url: string };
 
 type VendorAdmin = {
   id: number;
-  brand_name: string;
-  category: string;
-  city: string | null;
-  state: string | null;
-  address_line1: string | null;
-  address_line2: string | null;
-  postal_code: string | null;
-  phone: string | null;
-  fax: string | null;
-  contact_name: string | null;
-  contact_email: string | null;
-  bio_150: string | null;
-  description_full: string | null;
-  shop_links: ShopLink[];
+  productName: string;
+  productDescription: string | null;
+  productPrice: string | null;
+  productCategory: string;
+  productStock: string | null;
+  productImage: string | null;
+  productBrand: string | null;
+  productRating: string | null;
+  shopLinks: ShopLink[];
   submitted_email: string;
   status: string;
   featured: boolean;
   pt_listing_id: number | null;
-  logo_url: string | null;
-  banner_url: string | null;
   pt_previous_locations: string[] | null;
   pt_category_names: string[];
   pt_current_locations: string[];
@@ -54,21 +47,14 @@ export default function AdminVendorEditPage() {
   const [err, setErr] = useState<string | null>(null);
   const [v, setV] = useState<VendorAdmin | null>(null);
 
-  const [brandName, setBrandName] = useState("");
-  const [category, setCategory] = useState<string>("other");
-  const [city, setCity] = useState("");
-  const [state, setState] = useState("");
-  const [addressLine1, setAddressLine1] = useState("");
-  const [addressLine2, setAddressLine2] = useState("");
-  const [postalCode, setPostalCode] = useState("");
-  const [phone, setPhone] = useState("");
-  const [fax, setFax] = useState("");
-  const [contactName, setContactName] = useState("");
-  const [contactEmail, setContactEmail] = useState("");
-  const [bio150, setBio150] = useState("");
-  const [descriptionFull, setDescriptionFull] = useState("");
-  const [logoUrl, setLogoUrl] = useState("");
-  const [bannerUrl, setBannerUrl] = useState("");
+  const [productName, setProductName] = useState("");
+  const [productDescription, setProductDescription] = useState("");
+  const [productPrice, setProductPrice] = useState("");
+  const [productCategory, setProductCategory] = useState("other");
+  const [productStock, setProductStock] = useState("");
+  const [productImage, setProductImage] = useState<string | null>(null);
+  const [productBrand, setProductBrand] = useState("");
+  const [productRating, setProductRating] = useState("");
   const [prevPt, setPrevPt] = useState("");
   const [currPt, setCurrPt] = useState("");
   const [catNames, setCatNames] = useState("");
@@ -82,25 +68,18 @@ export default function AdminVendorEditPage() {
   const [featured, setFeatured] = useState(false);
 
   const hydrate = useCallback((row: VendorAdmin) => {
-    setBrandName(row.brand_name);
-    setCategory(row.category);
-    setCity(row.city ?? "");
-    setState(row.state ?? "");
-    setAddressLine1(row.address_line1 || "");
-    setAddressLine2(row.address_line2 || "");
-    setPostalCode(row.postal_code || "");
-    setPhone(row.phone || "");
-    setFax(row.fax || "");
-    setContactName(row.contact_name || "");
-    setContactEmail(row.contact_email || "");
-    setBio150(row.bio_150 ?? "");
-    setDescriptionFull(row.description_full || "");
-    setLogoUrl(row.logo_url || "");
-    setBannerUrl(row.banner_url || "");
+    setProductName(row.productName);
+    setProductDescription(row.productDescription || "");
+    setProductPrice(row.productPrice || "");
+    setProductCategory(row.productCategory || "other");
+    setProductStock(row.productStock || "");
+    setProductImage(row.productImage);
+    setProductBrand(row.productBrand || "");
+    setProductRating(row.productRating || "");
     setPrevPt(linesFromList(row.pt_previous_locations));
     setCurrPt(linesFromList(row.pt_current_locations));
     setCatNames((row.pt_category_names || []).join("\n"));
-    const sl = row.shop_links || [];
+    const sl = row.shopLinks || [];
     const next: ShopLink[] = [...sl, ...Array.from({ length: 4 - sl.length }, () => ({ label: "", url: "" }))].slice(
       0,
       4,
@@ -159,21 +138,14 @@ export default function AdminVendorEditPage() {
       .slice(0, 4);
 
     const payload = {
-      brand_name: brandName.trim(),
-      category,
-      city: city.trim() || null,
-      state: state.trim() ? state.trim().toUpperCase().slice(0, 8) : null,
-      address_line1: addressLine1.trim() || null,
-      address_line2: addressLine2.trim() || null,
-      postal_code: postalCode.trim() || null,
-      phone: phone.trim() || null,
-      fax: fax.trim() || null,
-      contact_name: contactName.trim() || null,
-      contact_email: contactEmail.trim() || null,
-      bio_150: bio150.trim() ? bio150.trim().slice(0, 160) : null,
-      description_full: descriptionFull.trim() || null,
-      logo_url: logoUrl.trim() || null,
-      banner_url: bannerUrl.trim() || null,
+      productName: productName.trim(),
+      productDescription: productDescription.trim() || null,
+      productPrice: productPrice.trim() || null,
+      productCategory: productCategory.trim() || "other",
+      productStock: productStock.trim() || null,
+      productImage: productImage?.trim() || null,
+      productBrand: productBrand.trim() || null,
+      productRating: productRating.trim() || null,
       pt_previous_locations: pt_prev,
       pt_current_locations: pt_curr,
       pt_category_names: pt_cats,
@@ -245,18 +217,44 @@ export default function AdminVendorEditPage() {
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="sm:col-span-2">
-          <Label htmlFor="brand">Brand name</Label>
-          <Input id="brand" value={brandName} onChange={(e) => setBrandName(e.target.value)} className="mt-1" />
+          <Label htmlFor="productName">productName</Label>
+          <Input id="productName" value={productName} onChange={(e) => setProductName(e.target.value)} className="mt-1" />
+        </div>
+        <div className="sm:col-span-2">
+          <Label htmlFor="productDescription">productDescription</Label>
+          <Textarea
+            id="productDescription"
+            value={productDescription}
+            onChange={(e) => setProductDescription(e.target.value)}
+            rows={5}
+            className="mt-1"
+          />
         </div>
         <div>
-          <Label htmlFor="cat">Directory category</Label>
+          <Label htmlFor="productPrice">productPrice</Label>
+          <Input id="productPrice" value={productPrice} onChange={(e) => setProductPrice(e.target.value)} className="mt-1" />
+        </div>
+        <div>
+          <Label htmlFor="productCategory">productCategory</Label>
           <Input
-            id="cat"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
+            id="productCategory"
+            value={productCategory}
+            onChange={(e) => setProductCategory(e.target.value)}
             className="mt-1"
-            placeholder="Any category"
+            placeholder="e.g. Electronics"
           />
+        </div>
+        <div>
+          <Label htmlFor="productStock">productStock</Label>
+          <Input id="productStock" value={productStock} onChange={(e) => setProductStock(e.target.value)} className="mt-1" />
+        </div>
+        <div>
+          <Label htmlFor="productBrand">productBrand</Label>
+          <Input id="productBrand" value={productBrand} onChange={(e) => setProductBrand(e.target.value)} className="mt-1" />
+        </div>
+        <div>
+          <Label htmlFor="productRating">productRating</Label>
+          <Input id="productRating" value={productRating} onChange={(e) => setProductRating(e.target.value)} className="mt-1" />
         </div>
         <div>
           <Label htmlFor="status">Status</Label>
@@ -271,48 +269,6 @@ export default function AdminVendorEditPage() {
             <option value="removed">removed</option>
           </select>
         </div>
-        <div>
-          <Label htmlFor="city">City (optional)</Label>
-          <Input id="city" value={city} onChange={(e) => setCity(e.target.value)} className="mt-1" />
-        </div>
-        <div>
-          <Label htmlFor="state">State / region (optional)</Label>
-          <Input id="state" value={state} onChange={(e) => setState(e.target.value)} maxLength={8} className="mt-1" />
-        </div>
-        <div className="sm:col-span-2">
-          <Label htmlFor="addr1">Address line 1</Label>
-          <Input id="addr1" value={addressLine1} onChange={(e) => setAddressLine1(e.target.value)} className="mt-1" />
-        </div>
-        <div className="sm:col-span-2">
-          <Label htmlFor="addr2">Address line 2</Label>
-          <Input id="addr2" value={addressLine2} onChange={(e) => setAddressLine2(e.target.value)} className="mt-1" />
-        </div>
-        <div>
-          <Label htmlFor="zip">ZIP / postal</Label>
-          <Input id="zip" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} className="mt-1" />
-        </div>
-        <div>
-          <Label htmlFor="phone">Phone</Label>
-          <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} className="mt-1" />
-        </div>
-        <div>
-          <Label htmlFor="fax">Fax</Label>
-          <Input id="fax" value={fax} onChange={(e) => setFax(e.target.value)} className="mt-1" />
-        </div>
-        <div>
-          <Label htmlFor="contact">Contact name</Label>
-          <Input id="contact" value={contactName} onChange={(e) => setContactName(e.target.value)} className="mt-1" />
-        </div>
-        <div>
-          <Label htmlFor="contactEmail">Contact email (public if set)</Label>
-          <Input
-            id="contactEmail"
-            type="email"
-            value={contactEmail}
-            onChange={(e) => setContactEmail(e.target.value)}
-            className="mt-1"
-          />
-        </div>
         <div className="sm:col-span-2 flex items-center gap-2 pt-1">
           <input id="feat" type="checkbox" checked={featured} onChange={(e) => setFeatured(e.target.checked)} />
           <Label htmlFor="feat" className="font-normal">
@@ -321,31 +277,13 @@ export default function AdminVendorEditPage() {
         </div>
       </div>
 
-      <div>
-        <Label htmlFor="bio">Short bio (optional, directory card, max 160)</Label>
-        <Input id="bio" value={bio150} onChange={(e) => setBio150(e.target.value)} maxLength={160} className="mt-1" />
-        <p className="mt-1 text-xs text-black/50">{bio150.length}/160</p>
+      <div className="space-y-4 border-t border-black/10 pt-4">
+        <p className="text-sm font-medium text-black/80">productImage (URL or upload)</p>
+        <VendorImageUpload kind="banner" value={productImage} onChange={setProductImage} />
       </div>
 
       <div>
-        <Label htmlFor="full">Full description (optional)</Label>
-        <Textarea
-          id="full"
-          value={descriptionFull}
-          onChange={(e) => setDescriptionFull(e.target.value)}
-          rows={8}
-          className="mt-1 font-mono text-sm"
-        />
-      </div>
-
-      <div className="space-y-6 border-t border-black/10 pt-4">
-        <p className="text-sm font-medium text-black/80">Logo and banner</p>
-        <VendorImageUpload kind="logo" value={logoUrl || null} onChange={(u) => setLogoUrl(u ?? "")} />
-        <VendorImageUpload kind="banner" value={bannerUrl || null} onChange={(u) => setBannerUrl(u ?? "")} />
-      </div>
-
-      <div>
-        <Label htmlFor="ptcat">Category tags (one per line, shown on public page)</Label>
+        <Label htmlFor="ptcat">Category tags (one per line, optional)</Label>
         <Textarea id="ptcat" value={catNames} onChange={(e) => setCatNames(e.target.value)} rows={4} className="mt-1" />
       </div>
 
@@ -360,7 +298,7 @@ export default function AdminVendorEditPage() {
       </div>
 
       <div>
-        <p className="text-sm font-medium">Shop links (up to 4; URL required)</p>
+        <p className="text-sm font-medium">Shop links (up to 4; URL required) — for “Visit their store”</p>
         <ul className="mt-2 space-y-2">
           {links.map((l, i) => (
             <li key={i} className="grid gap-2 sm:grid-cols-2">

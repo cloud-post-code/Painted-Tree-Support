@@ -13,6 +13,7 @@ from app.limiter import limiter
 from app.models.vendor import Vendor
 from app.services.captcha import verify_hcaptcha
 from app.services.vendor_images import allowed_vendor_asset_url, process_vendor_image, save_vendor_jpeg
+from app.services.vendor_product_sync import sync_vendor_legacy_from_product
 
 router = APIRouter(prefix="/vendors", tags=["vendors"])
 
@@ -23,27 +24,31 @@ class ShopLink(BaseModel):
 
 
 class VendorCreate(BaseModel):
-    model_config = ConfigDict(str_strip_whitespace=True)
+    """Public survey: exactly the eight product fields (camelCase in JSON) plus optional shop links and email."""
 
-    brand_name: str = Field(min_length=1, max_length=255)
-    category: str = Field(default="other", max_length=64)
-    city: str | None = Field(default=None, max_length=255)
-    state: str | None = Field(default=None, max_length=8)
-    bio_150: str | None = Field(default=None, max_length=160)
-    address_line1: str | None = Field(None, max_length=255)
-    address_line2: str | None = Field(None, max_length=255)
-    postal_code: str | None = Field(None, max_length=32)
-    phone: str | None = Field(None, max_length=64)
-    fax: str | None = Field(None, max_length=64)
-    contact_name: str | None = Field(None, max_length=255)
-    contact_email: EmailStr | None = None
+    model_config = ConfigDict(str_strip_whitespace=True, populate_by_name=True)
+
+    product_name: str = Field(..., alias="productName", min_length=1, max_length=255)
+    product_description: str | None = Field(None, alias="productDescription")
+    product_price: str | None = Field(None, alias="productPrice", max_length=64)
+    product_category: str = Field("other", alias="productCategory", max_length=64)
+    product_stock: str | None = Field(None, alias="productStock", max_length=32)
+    product_image: str | None = Field(None, alias="productImage", max_length=2048)
+    product_brand: str | None = Field(None, alias="productBrand", max_length=255)
+    product_rating: str | None = Field(None, alias="productRating", max_length=32)
     shop_links: list[ShopLink] = Field(default_factory=list, max_length=4)
-    logo_url: str | None = Field(None, max_length=2048)
-    banner_url: str | None = Field(None, max_length=2048)
     submitted_email: EmailStr | None = None
     hcaptcha_token: str | None = None
 
-    @field_validator("city", "state", "bio_150", mode="after")
+    @field_validator(
+        "product_description",
+        "product_price",
+        "product_stock",
+        "product_image",
+        "product_brand",
+        "product_rating",
+        mode="after",
+    )
     @classmethod
     def empty_str_to_none(cls, v: str | None) -> str | None:
         if v is None:
@@ -53,18 +58,16 @@ class VendorCreate(BaseModel):
 
 
 class VendorUpdateRequest(BaseModel):
-    brand_name: str | None = None
-    category: str | None = Field(None, max_length=64)
-    city: str | None = None
-    state: str | None = None
-    bio_150: str | None = Field(None, max_length=160)
-    address_line1: str | None = Field(None, max_length=255)
-    address_line2: str | None = Field(None, max_length=255)
-    postal_code: str | None = Field(None, max_length=32)
-    phone: str | None = Field(None, max_length=64)
-    fax: str | None = Field(None, max_length=64)
-    contact_name: str | None = Field(None, max_length=255)
-    contact_email: EmailStr | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+    product_name: str | None = Field(None, alias="productName", max_length=255)
+    product_description: str | None = Field(None, alias="productDescription")
+    product_price: str | None = Field(None, alias="productPrice", max_length=64)
+    product_category: str | None = Field(None, alias="productCategory", max_length=64)
+    product_stock: str | None = Field(None, alias="productStock", max_length=32)
+    product_image: str | None = Field(None, alias="productImage", max_length=2048)
+    product_brand: str | None = Field(None, alias="productBrand", max_length=255)
+    product_rating: str | None = Field(None, alias="productRating", max_length=32)
     shop_links: list[ShopLink] | None = None
     submitted_email: EmailStr
     note: str | None = None
@@ -95,7 +98,7 @@ async def list_vendors(
         q = q.where(Vendor.state == state)
     if featured is not None:
         q = q.where(Vendor.featured.is_(featured))
-    q = q.order_by(Vendor.featured.desc(), Vendor.brand_name)
+    q = q.order_by(Vendor.featured.desc(), Vendor.product_name)
     rows = (await db.execute(q)).scalars().all()
     out = [_vendor_public(r) for r in rows]
     if search:
@@ -103,22 +106,15 @@ async def list_vendors(
 
         def _haystack(vendor: dict) -> str:
             parts: list[str] = [
-                vendor.get("brand_name") or "",
-                vendor.get("bio_150") or "",
-                vendor.get("description_full") or "",
-                vendor.get("city") or "",
-                vendor.get("state") or "",
-                vendor.get("address_line1") or "",
-                vendor.get("address_line2") or "",
-                vendor.get("postal_code") or "",
-                vendor.get("phone") or "",
-                vendor.get("fax") or "",
-                vendor.get("contact_name") or "",
-                vendor.get("contact_email") or "",
+                vendor.get("productName") or "",
+                vendor.get("productBrand") or "",
+                vendor.get("productDescription") or "",
+                vendor.get("productCategory") or "",
+                vendor.get("productPrice") or "",
+                vendor.get("productStock") or "",
+                vendor.get("productRating") or "",
                 str(vendor.get("id") or ""),
             ]
-            parts.extend(str(x) for x in (vendor.get("pt_category_names") or []))
-            parts.extend(str(x) for x in (vendor.get("pt_current_locations") or []))
             return " ".join(parts).lower()
 
         out = [v for v in out if s in _haystack(v)]
@@ -137,26 +133,16 @@ def _strip_opt(s: str | None, max_len: int) -> str | None:
 def _vendor_public(v: Vendor) -> dict:
     return {
         "id": v.id,
-        "brand_name": v.brand_name,
-        "category": v.category,
-        "city": v.city,
-        "state": v.state,
-        "address_line1": v.address_line1,
-        "address_line2": v.address_line2,
-        "postal_code": v.postal_code,
-        "phone": v.phone,
-        "fax": v.fax,
-        "contact_name": v.contact_name,
-        "contact_email": v.contact_email,
-        "bio_150": v.bio_150,
-        "description_full": v.description_full,
-        "pt_category_names": v.pt_category_names or [],
-        "pt_current_locations": v.pt_current_locations or [],
-        "shop_links": v.shop_links or [],
+        "productName": v.product_name,
+        "productDescription": v.product_description,
+        "productPrice": v.product_price,
+        "productCategory": v.product_category,
+        "productStock": v.product_stock,
+        "productImage": v.product_image,
+        "productBrand": v.product_brand,
+        "productRating": v.product_rating,
+        "shopLinks": v.shop_links or [],
         "featured": v.featured,
-        "logo_url": v.logo_url,
-        "banner_url": v.banner_url,
-        "pt_previous_locations": v.pt_previous_locations or [],
     }
 
 
@@ -229,28 +215,26 @@ async def create_vendor(
     if not await verify_hcaptcha(body.hcaptcha_token, request.client.host if request.client else None):
         raise HTTPException(status_code=400, detail="Captcha failed")
     links = [x.model_dump() for x in body.shop_links][:4]
-    logo = _validated_asset_url(body.logo_url)
-    banner = _validated_asset_url(body.banner_url)
+    img = _validated_asset_url(body.product_image)
+    pn = body.product_name.strip()[:255]
+    pc = (body.product_category or "other").strip()[:64] or "other"
     row = Vendor(
-        brand_name=body.brand_name.strip(),
-        category=body.category,
-        city=_strip_opt(body.city, 255),
-        state=_strip_opt(body.state, 8),
-        bio_150=_strip_opt(body.bio_150, 160),
-        address_line1=_strip_opt(body.address_line1, 255),
-        address_line2=_strip_opt(body.address_line2, 255),
-        postal_code=_strip_opt(body.postal_code, 32),
-        phone=_strip_opt(body.phone, 64),
-        fax=_strip_opt(body.fax, 64),
-        contact_name=_strip_opt(body.contact_name, 255),
-        contact_email=str(body.contact_email).strip() if body.contact_email else None,
+        product_name=pn,
+        product_description=_strip_opt(body.product_description, 65535),
+        product_price=_strip_opt(body.product_price, 64),
+        product_category=pc,
+        product_stock=_strip_opt(body.product_stock, 32),
+        product_image=img,
+        product_brand=_strip_opt(body.product_brand, 255),
+        product_rating=_strip_opt(body.product_rating, 32),
+        brand_name=pn,
+        category=pc,
         shop_links=links,
-        logo_url=logo,
-        banner_url=banner,
         submitted_email=submitted_email,
         status="pending",
         user_id=user.id if user else None,
     )
+    sync_vendor_legacy_from_product(row)
     db.add(row)
     await db.commit()
     await db.refresh(row)

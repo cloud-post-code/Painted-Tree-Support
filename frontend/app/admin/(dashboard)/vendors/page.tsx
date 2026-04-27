@@ -8,13 +8,13 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { readResponseBodyJson } from "@/lib/api";
 
-// Marketplace / Main Street style column order (ref: https://medford.4goodvibes.shop/ )
-const VENDOR_CSV_TEMPLATE = `shop_name,category,tagline,description_full,city,state,postal_code,address_line1,address_line2,phone,fax,contact_name,contact_email,submitted_email,shop_url,shop_inperson_url,logo_url,banner_url,status,featured,pt_category_names,pt_current_locations,pt_previous_locations,pt_listing_id,id
-"Sample Artisan Coop",Gifts,Handmade in New England,Full story for the public profile after approval.,Medford,MA,02155,200 Main St,Suite 12,781-555-0100,,Alex Merchant,hello@shop.example,owner@shop.example,https://medford.4goodvibes.shop/,https://maps.example.com/place,https://images.example.com/logo.jpg,https://images.example.com/banner.jpg,published,false,"Gifts|Home decor","Downtown|Market hall","Riverside studio",,`;
+// Canonical vendor CSV: exactly eight product columns (same names as DB / survey), plus optional operational columns.
+const VENDOR_CSV_TEMPLATE = `productName,productDescription,productPrice,productCategory,productStock,productImage,productBrand,productRating,submitted_email,shop_url,shop_inperson_url,status,featured,pt_listing_id,id
+"Wireless Headphones","High-quality noise-canceling wireless headphones.",199.99,Electronics,50,https://example.com/images/headphones.jpg,SoundPro,4.8,seller@example.com,https://store.example.com,,published,false,,`;
 
-// Compact product-style row: title → brand; description → body; vendor_logo / vendor_banner; hero_image with share_image fallback for banner when vendor_banner is empty; pt_listing_id links the Sell-Now listing card to update
-const VENDOR_CSV_PRODUCT_STYLE_TEMPLATE = `title,description,price,category,quantity,vendor_logo,vendor_banner,hero_image,share_image,pt_listing_id
-"Sample Maker",Handmade candles and gifts,24.99,Gifts,12,https://images.example.com/logo.jpg,,https://images.example.com/card-hero.jpg,https://images.example.com/og-share.jpg,`;
+// Same eight columns with legacy aliases (title → productName, etc.) still supported by the importer.
+const VENDOR_CSV_LEGACY_ALIASES_TEMPLATE = `title,description,price,category,quantity,vendor_logo,vendor_banner,hero_image,share_image,pt_listing_id,submitted_email
+"Sample Maker",Handmade candles and gifts,24.99,Gifts,12,https://images.example.com/logo.jpg,,https://images.example.com/card-hero.jpg,https://images.example.com/og-share.jpg,,seller@example.com`;
 
 type ImportResult = {
   created: number;
@@ -25,14 +25,9 @@ type ImportResult = {
 
 type Row = {
   id: number;
-  brand_name: string;
+  productName: string;
+  productCategory?: string;
   status: string;
-  city?: string | null;
-  state?: string | null;
-  postal_code?: string | null;
-  phone?: string | null;
-  contact_name?: string | null;
-  contact_email?: string | null;
   submitted_email?: string;
 };
 
@@ -68,13 +63,8 @@ export default function AdminVendorsPage() {
     const s = q.toLowerCase();
     return published.filter((r) => {
       const hay = [
-        r.brand_name,
-        r.city || "",
-        r.state || "",
-        r.postal_code || "",
-        r.phone || "",
-        r.contact_name || "",
-        r.contact_email || "",
+        r.productName,
+        r.productCategory || "",
         r.submitted_email || "",
         String(r.id),
       ]
@@ -179,21 +169,16 @@ export default function AdminVendorsPage() {
       <section className="rounded-lg border border-black/10 bg-black/[0.02] p-4">
         <h2 className="text-lg font-bold">Import sellers (CSV)</h2>
         <p className="mt-1 text-sm text-black/65">
-          UTF-8 CSV in <strong>marketplace / directory</strong> column order: shop name, category, copy, address,
-          contact, online + in-person links, images, tags, and locations. Column names are case-insensitive;{" "}
-          <code className="text-xs">shop_name</code> (or <code className="text-xs">brand_name</code> /{" "}
-          <code className="text-xs">name</code> / <code className="text-xs">title</code>) is required. You can also
-          use a compact row with{" "}
-          <code className="text-xs">title</code>, <code className="text-xs">description</code>,{" "}
-          <code className="text-xs">category</code>, <code className="text-xs">vendor_logo</code>,{" "}
-          <code className="text-xs">vendor_banner</code>, <code className="text-xs">hero_image</code>,{" "}
-          <code className="text-xs">share_image</code> (optional <code className="text-xs">price</code> /{" "}
-          <code className="text-xs">quantity</code> are ignored). If <code className="text-xs">vendor_banner</code> is
-          empty, the profile banner uses <code className="text-xs">hero_image</code> when set, otherwise{" "}
-          <code className="text-xs">share_image</code>. Set <code className="text-xs">pt_listing_id</code> (or{" "}
-          <code className="text-xs">listing_id</code>) to a Sell-Now listing id to update that board card’s title,
-          description, category, and hero image (same hero/share/banner/logo rules). Layout matches common multi-vendor
-          mall sites such as{" "}
+          Required column: <code className="text-xs">productName</code> (or legacy <code className="text-xs">title</code>{" "}
+          / <code className="text-xs">brand_name</code>). The eight product fields are{" "}
+          <code className="text-xs">productName</code>, <code className="text-xs">productDescription</code>,{" "}
+          <code className="text-xs">productPrice</code>, <code className="text-xs">productCategory</code>,{" "}
+          <code className="text-xs">productStock</code>, <code className="text-xs">productImage</code>,{" "}
+          <code className="text-xs">productBrand</code>, <code className="text-xs">productRating</code>. Optional:{" "}
+          <code className="text-xs">submitted_email</code>, shop URLs, <code className="text-xs">status</code>,{" "}
+          <code className="text-xs">featured</code>, <code className="text-xs">pt_listing_id</code> (or{" "}
+          <code className="text-xs">listing_id</code>) to sync a Sell-Now listing card. Older marketplace-style columns
+          are still accepted via aliases. See{" "}
           <a
             href="https://medford.4goodvibes.shop/"
             className="font-medium text-[var(--vrr-teal)] underline"
@@ -206,9 +191,9 @@ export default function AdminVendorsPage() {
           <code className="text-xs">pending</code> or <code className="text-xs">removed</code>.
         </p>
         <p className="mt-2 text-sm text-black/65">
-          <strong>Without &quot;refresh&quot;:</strong> skips rows if that <code className="text-xs">brand_name</code>{" "}
+          <strong>Without &quot;refresh&quot;:</strong> skips rows if that <code className="text-xs">productName</code>{" "}
           already exists. <strong>With refresh:</strong> updates by <code className="text-xs">id</code> if present,
-          otherwise the first vendor with the same name (case-insensitive).
+          otherwise the first vendor with the same productName (case-insensitive).
         </p>
         <div className="mt-4 flex flex-wrap items-end gap-3">
           <div>
@@ -222,20 +207,21 @@ export default function AdminVendorsPage() {
           <Button type="button" disabled={importBusy} onClick={() => void runCsvImport()}>
             {importBusy ? "Uploading…" : "Upload & import"}
           </Button>
-          <Button type="button" variant="secondary" onClick={() => downloadCsvTemplate(VENDOR_CSV_TEMPLATE, "marketplace-vendors-import-template.csv")}>
-            Download directory template
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => downloadCsvTemplate(VENDOR_CSV_TEMPLATE, "vendors-product-import-template.csv")}
+          >
+            Download product template (8 columns)
           </Button>
           <Button
             type="button"
             variant="secondary"
             onClick={() =>
-              downloadCsvTemplate(
-                VENDOR_CSV_PRODUCT_STYLE_TEMPLATE,
-                "vendors-import-title-images-template.csv",
-              )
+              downloadCsvTemplate(VENDOR_CSV_LEGACY_ALIASES_TEMPLATE, "vendors-import-legacy-aliases-template.csv")
             }
           >
-            Download title + images template
+            Download legacy alias template
           </Button>
         </div>
         {importErr ? <p className="mt-3 text-sm text-red-700">{importErr}</p> : null}
@@ -249,7 +235,7 @@ export default function AdminVendorsPage() {
           {pending.map((r) => (
             <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 rounded border p-2">
               <span>
-                #{r.id} {r.brand_name}
+                #{r.id} {r.productName}
               </span>
               <div className="flex gap-2">
                 <Link
@@ -279,7 +265,7 @@ export default function AdminVendorsPage() {
             id="search"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Name, city, phone, email, ZIP…"
+            placeholder="Product name, category, email, id…"
             className="mt-1"
           />
         </div>
@@ -312,16 +298,14 @@ export default function AdminVendorsPage() {
                   checked={selected.includes(r.id)}
                   onChange={() => toggleSelected(r.id)}
                   disabled={deleteBusy}
-                  aria-label={`Select vendor ${r.brand_name}`}
+                  aria-label={`Select vendor ${r.productName}`}
                 />
                 <span>
-                  #{r.id} <span className="font-medium">{r.brand_name}</span>
+                  #{r.id} <span className="font-medium">{r.productName}</span>
                   <span className="text-black/55">
                     {" "}
                     ·{" "}
-                    {[r.city, r.state].filter((x) => x && String(x).trim()).join(", ") || "—"}
-                    {r.postal_code ? ` ${r.postal_code}` : ""}
-                    {r.phone ? ` · ${r.phone}` : ""}
+                    {r.productCategory || "—"}
                   </span>
                 </span>
               </label>
