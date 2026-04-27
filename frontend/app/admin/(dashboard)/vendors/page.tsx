@@ -263,7 +263,14 @@ export default function AdminVendorsPage() {
           <Button type="button" size="sm" variant="secondary" onClick={clearSelected} disabled={!selected.length || deleteBusy}>
             Clear selection
           </Button>
-          <Button type="button" size="sm" variant="destructive" onClick={() => void deleteSelected()} disabled={!selected.length || deleteBusy}>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="border-red-600 text-red-700 hover:bg-red-50"
+            onClick={() => void deleteSelected()}
+            disabled={!selected.length || deleteBusy}
+          >
             {deleteBusy ? "Deleting…" : `Delete selected (${selected.length})`}
           </Button>
         </div>

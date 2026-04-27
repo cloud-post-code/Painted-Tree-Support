@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { VendorImageUpload } from "@/components/vendor-image-upload";
 import { readResponseBodyJson } from "@/lib/api";
 
 type ShopLink = { label: string; url: string };
@@ -337,15 +338,10 @@ export default function AdminVendorEditPage() {
         />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <Label htmlFor="logo">Logo URL</Label>
-          <Input id="logo" value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} className="mt-1" />
-        </div>
-        <div>
-          <Label htmlFor="banner">Hero / banner URL</Label>
-          <Input id="banner" value={bannerUrl} onChange={(e) => setBannerUrl(e.target.value)} className="mt-1" />
-        </div>
+      <div className="space-y-6 border-t border-black/10 pt-4">
+        <p className="text-sm font-medium text-black/80">Logo and banner</p>
+        <VendorImageUpload kind="logo" value={logoUrl || null} onChange={(u) => setLogoUrl(u ?? "")} />
+        <VendorImageUpload kind="banner" value={bannerUrl || null} onChange={(u) => setBannerUrl(u ?? "")} />
       </div>
 
       <div>

@@ -165,7 +165,10 @@ def _validated_asset_url(url: str | None) -> str | None:
         return None
     u = str(url).strip()[:2048]
     if not allowed_vendor_asset_url(u):
-        raise HTTPException(status_code=400, detail="Invalid image URL — use the upload buttons for logo and banner.")
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid image URL — use a web address starting with https://, or upload an image file.",
+        )
     return u
 
 

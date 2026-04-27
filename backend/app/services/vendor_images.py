@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import uuid
 from io import BytesIO
+from urllib.parse import urlparse
 
 from PIL import Image, ImageOps
 
@@ -73,7 +74,7 @@ def _save_vendor_jpeg_local(jpeg_bytes: bytes) -> str:
 
 
 def allowed_vendor_asset_url(url: str | None) -> bool:
-    """Reject arbitrary URLs on vendor create (only our uploads)."""
+    """Allow hosted uploads, S3, or public http(s) image URLs (for pasted links)."""
     if not url or not str(url).strip():
         return True
     u = str(url).strip()
@@ -89,4 +90,8 @@ def allowed_vendor_asset_url(url: str | None) -> bool:
     bucket = settings.s3_bucket_name or ""
     if endpoint and bucket and f"/{bucket}/" in u:
         return True
+    if u.startswith("http://") or u.startswith("https://"):
+        p = urlparse(u)
+        if p.scheme in ("http", "https") and p.netloc:
+            return True
     return False

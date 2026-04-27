@@ -12,6 +12,7 @@ const buttonVariants = cva(
         outline: "border-2 border-[var(--vrr-teal)] text-[var(--vrr-teal)] bg-transparent hover:bg-[var(--vrr-cream)]",
         ghost: "text-[var(--vrr-ink)] hover:bg-black/5",
         link: "text-[var(--vrr-teal)] underline-offset-4 hover:underline",
+        destructive: "bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-600",
       },
       size: {
         default: "h-11 px-5 py-2",
