@@ -763,11 +763,16 @@ def _vendor_csv_merge_marketplace_aliases(nr: dict[str, str]) -> None:
             nr["shop_inperson_url"] = ip
 
     if not _csv_first_value(nr, "logo_url"):
-        lo = _csv_first_value(nr, "logo", "image_url", "image", "thumb_url")
+        lo = _csv_first_value(nr, "vendor_logo", "logo", "image_url", "image", "thumb_url")
         if lo:
             nr["logo_url"] = lo
     if not _csv_first_value(nr, "banner_url"):
-        ban = _csv_first_value(nr, "hero_url", "cover_url", "banner", "header_image")
+        ban = _csv_first_value(nr, "vendor_banner", "hero_url", "cover_url", "banner", "header_image")
+        if not ban:
+            # Listing-style exports: hero image URL, else share / OG image when hero is absent
+            ban = _csv_first_value(nr, "hero_image", "hero") or _csv_first_value(
+                nr, "share_image", "share_url", "og_image", "social_image"
+            )
         if ban:
             nr["banner_url"] = ban
 
@@ -869,7 +874,8 @@ async def admin_import_vendors_csv(
     ``bio_150`` / ``bio`` / ``tagline`` / ``short_description``, ``description_full`` / ``long_description``,
     ``shop_url`` / ``website`` / ``shop_link``, ``shop_inperson_url``,
     ``shop_url_label``, ``shop_inperson_label``,
-    ``logo_url`` / ``image_url``, ``banner_url`` / ``hero_url``,
+    ``logo_url`` / ``vendor_logo`` / ``image_url``, ``banner_url`` / ``vendor_banner`` / ``hero_url``,
+    ``hero_image`` (with ``share_image`` / ``share_url`` / ``og_image`` used when ``hero_image`` is empty),
     ``status`` (default ``published``), ``featured``,
     ``pt_category_names`` / ``tags`` (``|`` or ``,``-separated), ``pt_current_locations``, ``pt_previous_locations``,
     ``pt_listing_id``,

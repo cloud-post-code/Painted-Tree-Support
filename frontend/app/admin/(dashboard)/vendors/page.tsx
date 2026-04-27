@@ -12,6 +12,10 @@ import { readResponseBodyJson } from "@/lib/api";
 const VENDOR_CSV_TEMPLATE = `shop_name,category,tagline,description_full,city,state,postal_code,address_line1,address_line2,phone,fax,contact_name,contact_email,submitted_email,shop_url,shop_inperson_url,logo_url,banner_url,status,featured,pt_category_names,pt_current_locations,pt_previous_locations,pt_listing_id,id
 "Sample Artisan Coop",Gifts,Handmade in New England,Full story for the public profile after approval.,Medford,MA,02155,200 Main St,Suite 12,781-555-0100,,Alex Merchant,hello@shop.example,owner@shop.example,https://medford.4goodvibes.shop/,https://maps.example.com/place,https://images.example.com/logo.jpg,https://images.example.com/banner.jpg,published,false,"Gifts|Home decor","Downtown|Market hall","Riverside studio",,`;
 
+// Compact product-style row: title → brand; description → body; vendor_logo / vendor_banner; hero_image with share_image fallback for banner when vendor_banner is empty
+const VENDOR_CSV_PRODUCT_STYLE_TEMPLATE = `title,description,price,category,quantity,vendor_logo,vendor_banner,hero_image,share_image
+"Sample Maker",Handmade candles and gifts,24.99,Gifts,12,https://images.example.com/logo.jpg,,https://images.example.com/card-hero.jpg,https://images.example.com/og-share.jpg`;
+
 type ImportResult = {
   created: number;
   updated: number;
@@ -122,12 +126,12 @@ export default function AdminVendorsPage() {
     load();
   }
 
-  function downloadCsvTemplate() {
-    const blob = new Blob([VENDOR_CSV_TEMPLATE], { type: "text/csv;charset=utf-8" });
+  function downloadCsvTemplate(contents: string, filename: string) {
+    const blob = new Blob([contents], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "marketplace-vendors-import-template.csv";
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -178,7 +182,15 @@ export default function AdminVendorsPage() {
           UTF-8 CSV in <strong>marketplace / directory</strong> column order: shop name, category, copy, address,
           contact, online + in-person links, images, tags, and locations. Column names are case-insensitive;{" "}
           <code className="text-xs">shop_name</code> (or <code className="text-xs">brand_name</code> /{" "}
-          <code className="text-xs">name</code>) is required. Layout matches common multi-vendor mall sites such as{" "}
+          <code className="text-xs">name</code> / <code className="text-xs">title</code>) is required. You can also
+          use a compact row with{" "}
+          <code className="text-xs">title</code>, <code className="text-xs">description</code>,{" "}
+          <code className="text-xs">category</code>, <code className="text-xs">vendor_logo</code>,{" "}
+          <code className="text-xs">vendor_banner</code>, <code className="text-xs">hero_image</code>,{" "}
+          <code className="text-xs">share_image</code> (optional <code className="text-xs">price</code> /{" "}
+          <code className="text-xs">quantity</code> are ignored). If <code className="text-xs">vendor_banner</code> is
+          empty, the profile banner uses <code className="text-xs">hero_image</code> when set, otherwise{" "}
+          <code className="text-xs">share_image</code>. Layout matches common multi-vendor mall sites such as{" "}
           <a
             href="https://medford.4goodvibes.shop/"
             className="font-medium text-[var(--vrr-teal)] underline"
@@ -207,8 +219,20 @@ export default function AdminVendorsPage() {
           <Button type="button" disabled={importBusy} onClick={() => void runCsvImport()}>
             {importBusy ? "Uploading…" : "Upload & import"}
           </Button>
-          <Button type="button" variant="secondary" onClick={downloadCsvTemplate}>
-            Download template
+          <Button type="button" variant="secondary" onClick={() => downloadCsvTemplate(VENDOR_CSV_TEMPLATE, "marketplace-vendors-import-template.csv")}>
+            Download directory template
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() =>
+              downloadCsvTemplate(
+                VENDOR_CSV_PRODUCT_STYLE_TEMPLATE,
+                "vendors-import-title-images-template.csv",
+              )
+            }
+          >
+            Download title + images template
           </Button>
         </div>
         {importErr ? <p className="mt-3 text-sm text-red-700">{importErr}</p> : null}
