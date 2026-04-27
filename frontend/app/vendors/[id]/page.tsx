@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { VendorShopLinks } from "@/components/vendor-shop-links";
-import { apiGetNoStore, resolveMediaUrl } from "@/lib/api";
+import { VendorProfileHero } from "@/components/vendor-profile-hero";
+import { apiGetNoStore } from "@/lib/api";
 
 type Vendor = {
   id: number;
@@ -52,6 +53,7 @@ export default async function VendorProfile({ params }: { params: Promise<{ id: 
       <Link href="/vendors" className="text-sm text-[var(--vrr-teal)]">
         ← Directory
       </Link>
+      <VendorProfileHero brandName={v.brand_name} bannerUrl={v.banner_url} logoUrl={v.logo_url} />
       <h1 className="mt-4 text-3xl font-bold">{v.brand_name}</h1>
       <div className="text-sm text-black/60">
         {addrLines.length > 0 ? (
@@ -96,46 +98,24 @@ export default async function VendorProfile({ params }: { params: Promise<{ id: 
           </span>
         ))}
       </div>
-      {v.banner_url ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={resolveMediaUrl(v.banner_url) || ""}
-          alt=""
-          className="mt-4 w-full max-h-72 rounded-xl border border-black/10 object-cover object-center"
-          loading="lazy"
-          referrerPolicy="no-referrer"
-        />
-      ) : null}
-      <div className="mt-4 flex flex-wrap items-start gap-4">
-        {v.logo_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={resolveMediaUrl(v.logo_url) || ""}
-            alt=""
-            className="size-24 shrink-0 rounded-xl border border-black/10 object-cover"
-            loading="lazy"
-            referrerPolicy="no-referrer"
-          />
+      <div className="mt-4 min-w-0">
+        {bodyText ? (
+          <p className="whitespace-pre-wrap text-[0.95rem] leading-relaxed">{bodyText}</p>
+        ) : (
+          <p className="text-sm text-black/55">No description yet.</p>
+        )}
+        {v.pt_previous_locations && v.pt_previous_locations.length > 0 ? (
+          <p className="mt-3 text-sm text-black/65">
+            <span className="font-medium text-black/80">Previous Painted Tree: </span>
+            {v.pt_previous_locations.join(" · ")}
+          </p>
         ) : null}
-        <div className="min-w-0 flex-1">
-          {bodyText ? (
-            <p className="whitespace-pre-wrap text-[0.95rem] leading-relaxed">{bodyText}</p>
-          ) : (
-            <p className="text-sm text-black/55">No description yet.</p>
-          )}
-          {v.pt_previous_locations && v.pt_previous_locations.length > 0 ? (
-            <p className="mt-3 text-sm text-black/65">
-              <span className="font-medium text-black/80">Previous Painted Tree: </span>
-              {v.pt_previous_locations.join(" · ")}
-            </p>
-          ) : null}
-          {v.pt_current_locations && v.pt_current_locations.length > 0 ? (
-            <p className="mt-2 text-sm text-black/65">
-              <span className="font-medium text-black/80">Current location: </span>
-              {v.pt_current_locations.join(" · ")}
-            </p>
-          ) : null}
-        </div>
+        {v.pt_current_locations && v.pt_current_locations.length > 0 ? (
+          <p className="mt-2 text-sm text-black/65">
+            <span className="font-medium text-black/80">Current location: </span>
+            {v.pt_current_locations.join(" · ")}
+          </p>
+        ) : null}
       </div>
       <VendorShopLinks links={v.shop_links || []} />
     </div>
