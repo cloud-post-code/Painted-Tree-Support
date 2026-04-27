@@ -122,8 +122,8 @@ function VendorListCard({ v }: { v: Vendor }) {
               target="_blank"
               rel="noopener noreferrer"
               className={cn(
-                buttonVariants({ variant: "default", size: "default" }),
-                "w-full rounded-xl shadow-sm ring-1 ring-black/[0.04] transition-[box-shadow,transform] hover:shadow-md hover:ring-black/[0.06] active:scale-[0.99]",
+                buttonVariants({ variant: "default", size: "lg" }),
+                "w-full rounded-xl shadow-sm ring-1 ring-black/[0.04] transition-[box-shadow,transform] hover:shadow-md hover:ring-black/[0.06] active:scale-[0.99] [&_svg]:size-5",
               )}
               onClick={() =>
                 trackEvent("external_link_click", { url: v.website || "", context: "vendor_card_website" })
