@@ -25,10 +25,7 @@ class ListingCreate(BaseModel):
     contact_phone: str | None = Field(None, max_length=64)
     contact_email: EmailStr | None = None
     website_url: str | None = Field(None, max_length=2048)
-    category: str = Field(
-        "general",
-        pattern="^(general|food|retail|crafts|services|beauty)$",
-    )
+    category: str = Field("general", max_length=64)
     description: str | None = None
     hcaptcha_token: str | None = None
 

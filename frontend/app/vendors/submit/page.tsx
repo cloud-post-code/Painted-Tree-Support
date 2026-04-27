@@ -9,16 +9,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { readResponseBodyJson } from "@/lib/api";
 import { useCurrentUser } from "@/lib/use-current-user";
 
-const CATEGORIES: { value: string; label: string }[] = [
-  { value: "jewelry", label: "Jewelry" },
-  { value: "food", label: "Food" },
-  { value: "clothing", label: "Clothing" },
-  { value: "art", label: "Art" },
-  { value: "beauty", label: "Beauty" },
-  { value: "home", label: "Home" },
-  { value: "other", label: "Other" },
-];
-
 export default function VendorSubmitPage() {
   const [msg, setMsg] = useState("");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
@@ -98,13 +88,7 @@ export default function VendorSubmitPage() {
         </div>
         <div>
           <Label htmlFor="category">Category (optional)</Label>
-          <select id="category" name="category" className="mt-1 w-full rounded-lg border p-2" defaultValue="other">
-            {CATEGORIES.map((c) => (
-              <option key={c.value} value={c.value}>
-                {c.label}
-              </option>
-            ))}
-          </select>
+          <Input id="category" name="category" className="mt-1" placeholder="Any category" />
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div>

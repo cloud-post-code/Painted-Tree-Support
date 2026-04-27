@@ -554,7 +554,7 @@ class VendorAdminUpdate(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
     brand_name: str | None = Field(None, max_length=255)
-    category: str | None = Field(None, pattern="^(jewelry|food|clothing|art|beauty|home|other)$")
+    category: str | None = Field(None, max_length=64)
     city: str | None = Field(None, max_length=255)
     state: str | None = Field(None, max_length=8)
     address_line1: str | None = Field(None, max_length=255)
@@ -574,6 +574,10 @@ class VendorAdminUpdate(BaseModel):
     shop_links: list[VendorAdminShopLink] | None = Field(None, max_length=4)
     status: str | None = Field(None, pattern="^(pending|published|removed)$")
     featured: bool | None = None
+
+
+class VendorBulkDeleteIn(BaseModel):
+    ids: list[int] = Field(min_length=1, max_length=500)
 
 
 @router.get("/vendors")
@@ -649,6 +653,32 @@ async def admin_vendor_status(
     return {"id": row.id, "status": row.status, "featured": row.featured}
 
 
+@router.delete("/vendors/{vid}")
+async def admin_vendor_delete(
+    admin: CurrentAdmin, vid: int, db: Annotated[AsyncSession, Depends(get_db)]
+) -> dict:
+    _ = admin
+    row = (await db.execute(select(Vendor).where(Vendor.id == vid))).scalar_one_or_none()
+    if not row:
+        raise HTTPException(404, "Not found")
+    await db.delete(row)
+    await db.commit()
+    return {"ok": True, "deleted": 1}
+
+
+@router.post("/vendors/bulk-delete")
+async def admin_vendor_bulk_delete(
+    admin: CurrentAdmin, body: VendorBulkDeleteIn, db: Annotated[AsyncSession, Depends(get_db)]
+) -> dict:
+    _ = admin
+    ids = sorted({int(x) for x in body.ids if int(x) > 0})
+    if not ids:
+        raise HTTPException(400, "No ids")
+    res = await db.execute(delete(Vendor).where(Vendor.id.in_(ids)))
+    await db.commit()
+    return {"ok": True, "deleted": int(res.rowcount or 0)}
+
+
 def _csv_row_norm(row: dict) -> dict[str, str]:
     return {
         (str(k or "").strip().lstrip("\ufeff").lower()): ("" if v is None else str(v).strip())
@@ -657,10 +687,141 @@ def _csv_row_norm(row: dict) -> dict[str, str]:
     }
 
 
+def _csv_first_value(nr: dict[str, str], *keys: str) -> str:
+    for k in keys:
+        v = (nr.get(k) or "").strip()
+        if v:
+            return v
+    return ""
+
+
+def _vendor_csv_merge_marketplace_aliases(nr: dict[str, str]) -> None:
+    """Map marketplace / Main Street style exports (e.g. 4 Good Vibes) to canonical import keys.
+
+    All keys are already lowercased by _csv_row_norm.
+    """
+    if not _csv_first_value(nr, "brand_name", "name"):
+        shop = _csv_first_value(
+            nr,
+            "shop_name",
+            "store_name",
+            "vendor_name",
+            "business_name",
+            "company",
+            "title",
+            "shop",
+        )
+        if shop:
+            nr["brand_name"] = shop
+
+    if not _csv_first_value(nr, "address_line1", "addr1"):
+        line1 = _csv_first_value(
+            nr,
+            "street_address",
+            "address",
+            "street",
+            "street1",
+            "physical_address",
+            "location_address",
+            "addr",
+        )
+        if line1:
+            nr["address_line1"] = line1
+    if not _csv_first_value(nr, "address_line2", "addr2"):
+        line2 = _csv_first_value(nr, "address_line_2", "street2", "suite", "unit")
+        if line2:
+            nr["address_line2"] = line2
+
+    if not _csv_first_value(nr, "postal_code", "zip"):
+        z = _csv_first_value(nr, "postcode", "zip_code", "postal", "zipcode")
+        if z:
+            nr["postal_code"] = z
+
+    if not _csv_first_value(nr, "shop_url", "website", "shop_online_url"):
+        online = _csv_first_value(
+            nr,
+            "shop_online",
+            "online_url",
+            "store_url",
+            "ecommerce_url",
+            "web",
+            "shop_link",
+            "store_link",
+        )
+        if online and not online.lower().startswith(("http://", "https://")):
+            online = f"https://{online.lstrip('/')}"
+        if online:
+            nr["shop_url"] = online
+
+    if not _csv_first_value(nr, "shop_inperson_url", "market_url"):
+        ip = _csv_first_value(
+            nr, "in_person_url", "shop_in_person_url", "local_url", "marketplace_url", "map_url", "location_url"
+        )
+        if ip and not ip.lower().startswith(("http://", "https://")):
+            ip = f"https://{ip.lstrip('/')}"
+        if ip:
+            nr["shop_inperson_url"] = ip
+
+    if not _csv_first_value(nr, "logo_url"):
+        lo = _csv_first_value(nr, "logo", "image_url", "image", "thumb_url")
+        if lo:
+            nr["logo_url"] = lo
+    if not _csv_first_value(nr, "banner_url"):
+        ban = _csv_first_value(nr, "hero_url", "cover_url", "banner", "header_image")
+        if ban:
+            nr["banner_url"] = ban
+
+    if not _csv_first_value(nr, "bio_150", "bio"):
+        tag = _csv_first_value(nr, "tagline", "short_description", "summary", "headline", "blurb", "excerpt")
+        if tag:
+            nr["bio_150"] = tag[:160]
+    if not _csv_first_value(nr, "description_full", "description"):
+        long_ = _csv_first_value(nr, "long_description", "about", "full_description", "details")
+        if long_:
+            nr["description_full"] = long_
+
+    if not _csv_first_value(nr, "pt_category_names", "pt_categories"):
+        raw_tags = _csv_first_value(
+            nr, "tags", "shop_tags", "product_tags", "categories", "all_categories", "shop_categories"
+        )
+        if raw_tags:
+            nr["pt_category_names"] = raw_tags
+    tags_val = (nr.get("pt_category_names") or nr.get("pt_categories") or "").strip()
+    if tags_val and "," in tags_val and "|" not in tags_val:
+        nr["pt_category_names"] = tags_val.replace(",", "|")
+    for loc_key, alt_keys in (
+        ("pt_current_locations", ("current_locations", "locations", "active_locations", "booths", "booth")),
+        ("pt_previous_locations", ("previous_locations", "past_locations", "relocated_from")),
+    ):
+        if not _csv_first_value(nr, loc_key):
+            alt = _csv_first_value(nr, *alt_keys)
+            if alt:
+                nr[loc_key] = alt
+                if "," in alt and "|" not in alt:
+                    nr[loc_key] = alt.replace(",", "|")
+
+    for email_key, alt in (
+        ("submitted_email", ("account_email", "owner_email", "primary_email", "user_email", "reg_email")),
+        ("contact_email", ("business_email", "public_email", "shop_email", "cs_email", "email_public")),
+    ):
+        if not _csv_first_value(nr, email_key):
+            e = _csv_first_value(nr, *alt)
+            if e:
+                nr[email_key] = e
+
+    if not _csv_first_value(nr, "contact_name", "contact"):
+        cname = _csv_first_value(nr, "owner_name", "manager", "shop_contact", "store_contact", "contact_person")
+        if cname:
+            nr["contact_name"] = cname
+    if not _csv_first_value(nr, "phone"):
+        ph = _csv_first_value(nr, "telephone", "mobile", "cell", "phone_number", "tel")
+        if ph:
+            nr["phone"] = ph
+
+
 def _vendor_csv_category(val: str) -> str:
-    allowed = frozenset({"jewelry", "food", "clothing", "art", "beauty", "home", "other"})
-    s = (val or "").strip().lower() or "other"
-    return s if s in allowed else "other"
+    s = (val or "").strip()
+    return s[:64] if s else "other"
 
 
 def _vendor_csv_pipe_list(val: str) -> list[str] | None:
@@ -694,17 +855,24 @@ async def admin_import_vendors_csv(
     file: Annotated[UploadFile, File()],
     refresh: bool = False,
 ) -> dict:
-    """Import seller rows from CSV. Headers (case-insensitive, aliases in parentheses):
+    """Import seller rows from CSV. Headers (case-insensitive, aliases in parentheses).
 
-    Required: ``brand_name`` (or ``name``).
+    Common marketplace / Main Street directory layouts (e.g. multi-vendor mall exports) are supported via
+    extra aliases (see :func:`_vendor_csv_merge_marketplace_aliases`).
+
+    Required: ``brand_name`` (or ``name``, ``shop_name``, ``store_name``, ``vendor_name``, …).
 
     Optional: ``category``, ``city``, ``state`` (or ``st``), ``zip`` / ``postal_code``,
-    ``address_line1`` / ``addr1``, ``address_line2`` / ``addr2``,
-    ``phone``, ``fax``, ``contact_name`` / ``contact``, ``contact_email``, ``submitted_email`` / ``email``,
-    ``bio_150`` / ``bio``, ``description_full`` / ``description``,
-    ``shop_url`` / ``website``, ``shop_inperson_url``, ``shop_url_label``, ``shop_inperson_label``,
-    ``logo_url``, ``banner_url``, ``status`` (default ``published``), ``featured``,
-    ``pt_category_names`` (pipe-separated), ``pt_current_locations``, ``pt_previous_locations`` (pipe-separated),
+    ``address_line1`` / ``addr1`` / ``street_address``, ``address_line2`` / ``addr2``,
+    ``phone`` / ``telephone`` / ``mobile``, ``fax``, ``contact_name`` / ``contact`` / ``owner_name``,
+    ``contact_email``, ``submitted_email`` / ``email``,
+    ``bio_150`` / ``bio`` / ``tagline`` / ``short_description``, ``description_full`` / ``long_description``,
+    ``shop_url`` / ``website`` / ``shop_link``, ``shop_inperson_url``,
+    ``shop_url_label``, ``shop_inperson_label``,
+    ``logo_url`` / ``image_url``, ``banner_url`` / ``hero_url``,
+    ``status`` (default ``published``), ``featured``,
+    ``pt_category_names`` / ``tags`` (``|`` or ``,``-separated), ``pt_current_locations``, ``pt_previous_locations``,
+    ``pt_listing_id``,
     ``id`` (when ``refresh`` is true, update this vendor by id instead of insert).
 
     If ``submitted_email`` and ``contact_email`` are both empty, a placeholder ``@invalid`` address is used.
@@ -728,6 +896,7 @@ async def admin_import_vendors_csv(
     for line_no, row in enumerate(reader, start=2):
         try:
             nr = _csv_row_norm(row)
+            _vendor_csv_merge_marketplace_aliases(nr)
             brand = (nr.get("brand_name") or nr.get("name") or "").strip()
             if not brand:
                 skipped += 1
@@ -768,7 +937,9 @@ async def admin_import_vendors_csv(
                 "featured": _vendor_csv_truthy(nr.get("featured")),
                 "logo_url": (nr.get("logo_url") or "").strip()[:2048] or None,
                 "banner_url": (nr.get("banner_url") or "").strip()[:2048] or None,
-                "pt_category_names": _vendor_csv_pipe_list(nr.get("pt_category_names") or nr.get("pt_categories") or ""),
+                "pt_category_names": _vendor_csv_pipe_list(
+                    nr.get("pt_category_names") or nr.get("pt_categories") or ""
+                ),
                 "pt_current_locations": _vendor_csv_pipe_list(
                     nr.get("pt_current_locations") or nr.get("current_locations") or ""
                 ),

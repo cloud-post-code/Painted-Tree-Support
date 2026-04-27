@@ -39,8 +39,6 @@ type VendorAdmin = {
   pt_current_locations: string[];
 };
 
-const CATEGORIES = ["jewelry", "food", "clothing", "art", "beauty", "home", "other"] as const;
-
 function linesFromList(list: string[] | null | undefined): string {
   if (!list || !list.length) return "";
   return list.join("\n");
@@ -251,18 +249,13 @@ export default function AdminVendorEditPage() {
         </div>
         <div>
           <Label htmlFor="cat">Directory category</Label>
-          <select
+          <Input
             id="cat"
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-black/15 p-2"
-          >
-            {CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+            className="mt-1"
+            placeholder="Any category"
+          />
         </div>
         <div>
           <Label htmlFor="status">Status</Label>

@@ -8,8 +8,9 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { readResponseBodyJson } from "@/lib/api";
 
-const VENDOR_CSV_TEMPLATE = `brand_name,category,city,state,zip,address_line1,address_line2,phone,fax,contact_name,contact_email,submitted_email,bio_150,description_full,shop_url,shop_inperson_url,status,featured,pt_category_names,pt_current_locations
-"Example Studio",art,Austin,TX,78701,123 Main St,,512-555-0100,,Jane Doe,jane@example.com,owner@example.com,"Short card text","Longer story…",https://shop.example,https://maps.example,published,false,"Paintings|Mixed media","Location A|Location B"`;
+// Marketplace / Main Street style column order (ref: https://medford.4goodvibes.shop/ )
+const VENDOR_CSV_TEMPLATE = `shop_name,category,tagline,description_full,city,state,postal_code,address_line1,address_line2,phone,fax,contact_name,contact_email,submitted_email,shop_url,shop_inperson_url,logo_url,banner_url,status,featured,pt_category_names,pt_current_locations,pt_previous_locations,pt_listing_id,id
+"Sample Artisan Coop",Gifts,Handmade in New England,Full story for the public profile after approval.,Medford,MA,02155,200 Main St,Suite 12,781-555-0100,,Alex Merchant,hello@shop.example,owner@shop.example,https://medford.4goodvibes.shop/,https://maps.example.com/place,https://images.example.com/logo.jpg,https://images.example.com/banner.jpg,published,false,"Gifts|Home decor","Downtown|Market hall","Riverside studio",,`;
 
 type ImportResult = {
   created: number;
@@ -34,6 +35,10 @@ type Row = {
 export default function AdminVendorsPage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [q, setQ] = useState("");
+  const [selected, setSelected] = useState<number[]>([]);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteMsg, setDeleteMsg] = useState<string | null>(null);
+  const [deleteErr, setDeleteErr] = useState<string | null>(null);
   const [importBusy, setImportBusy] = useState(false);
   const [importMsg, setImportMsg] = useState<string | null>(null);
   const [importErr, setImportErr] = useState<string | null>(null);
@@ -80,12 +85,49 @@ export default function AdminVendorsPage() {
     load();
   }
 
+  function toggleSelected(id: number) {
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  function selectAllFilteredPublished() {
+    setSelected(filteredPublished.map((r) => r.id));
+  }
+
+  function clearSelected() {
+    setSelected([]);
+  }
+
+  async function deleteSelected() {
+    if (!selected.length || deleteBusy) return;
+    const confirmed = window.confirm(`Delete ${selected.length} selected vendor(s)? This cannot be undone.`);
+    if (!confirmed) return;
+    setDeleteBusy(true);
+    setDeleteErr(null);
+    setDeleteMsg(null);
+    const r = await fetch("/api/bff/v1/admin/manage/vendors/bulk-delete", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: selected }),
+    });
+    const data = await readResponseBodyJson<{ deleted?: number; detail?: string }>(r);
+    setDeleteBusy(false);
+    if (!r.ok) {
+      setDeleteErr(data?.detail || "Delete failed.");
+      return;
+    }
+    const deleted = data?.deleted ?? selected.length;
+    setDeleteMsg(`Deleted ${deleted} vendor(s).`);
+    setSelected([]);
+    load();
+  }
+
   function downloadCsvTemplate() {
     const blob = new Blob([VENDOR_CSV_TEMPLATE], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "vendors-import-template.csv";
+    a.download = "marketplace-vendors-import-template.csv";
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -133,9 +175,19 @@ export default function AdminVendorsPage() {
       <section className="rounded-lg border border-black/10 bg-black/[0.02] p-4">
         <h2 className="text-lg font-bold">Import sellers (CSV)</h2>
         <p className="mt-1 text-sm text-black/65">
-          UTF-8 CSV. Header names are case-insensitive. Required column: <code className="text-xs">brand_name</code>{" "}
-          (or <code className="text-xs">name</code>). Other columns are optional — see template. New rows default to{" "}
-          <strong>published</strong> unless you set <code className="text-xs">status</code> to{" "}
+          UTF-8 CSV in <strong>marketplace / directory</strong> column order: shop name, category, copy, address,
+          contact, online + in-person links, images, tags, and locations. Column names are case-insensitive;{" "}
+          <code className="text-xs">shop_name</code> (or <code className="text-xs">brand_name</code> /{" "}
+          <code className="text-xs">name</code>) is required. Layout matches common multi-vendor mall sites such as{" "}
+          <a
+            href="https://medford.4goodvibes.shop/"
+            className="font-medium text-[var(--vrr-teal)] underline"
+            target="_blank"
+            rel="noreferrer"
+          >
+            4 Good Vibes
+          </a>
+          . New rows default to <strong>published</strong> unless <code className="text-xs">status</code> is{" "}
           <code className="text-xs">pending</code> or <code className="text-xs">removed</code>.
         </p>
         <p className="mt-2 text-sm text-black/65">
@@ -204,19 +256,41 @@ export default function AdminVendorsPage() {
             className="mt-1"
           />
         </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Button type="button" size="sm" variant="secondary" onClick={selectAllFilteredPublished} disabled={!filteredPublished.length || deleteBusy}>
+            Select all shown
+          </Button>
+          <Button type="button" size="sm" variant="secondary" onClick={clearSelected} disabled={!selected.length || deleteBusy}>
+            Clear selection
+          </Button>
+          <Button type="button" size="sm" variant="destructive" onClick={() => void deleteSelected()} disabled={!selected.length || deleteBusy}>
+            {deleteBusy ? "Deleting…" : `Delete selected (${selected.length})`}
+          </Button>
+        </div>
+        {deleteErr ? <p className="mt-2 text-sm text-red-700">{deleteErr}</p> : null}
+        {deleteMsg ? <p className="mt-2 text-sm text-green-800">{deleteMsg}</p> : null}
         <ul className="mt-4 space-y-2 text-sm">
           {filteredPublished.map((r) => (
             <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 rounded border p-2">
-              <span>
-                #{r.id} <span className="font-medium">{r.brand_name}</span>
-                <span className="text-black/55">
-                  {" "}
-                  ·{" "}
-                  {[r.city, r.state].filter((x) => x && String(x).trim()).join(", ") || "—"}
-                  {r.postal_code ? ` ${r.postal_code}` : ""}
-                  {r.phone ? ` · ${r.phone}` : ""}
+              <label className="flex cursor-pointer items-start gap-2">
+                <input
+                  type="checkbox"
+                  checked={selected.includes(r.id)}
+                  onChange={() => toggleSelected(r.id)}
+                  disabled={deleteBusy}
+                  aria-label={`Select vendor ${r.brand_name}`}
+                />
+                <span>
+                  #{r.id} <span className="font-medium">{r.brand_name}</span>
+                  <span className="text-black/55">
+                    {" "}
+                    ·{" "}
+                    {[r.city, r.state].filter((x) => x && String(x).trim()).join(", ") || "—"}
+                    {r.postal_code ? ` ${r.postal_code}` : ""}
+                    {r.phone ? ` · ${r.phone}` : ""}
+                  </span>
                 </span>
-              </span>
+              </label>
               <Link
                 href={`/admin/vendors/${r.id}`}
                 className={cn(buttonVariants({ variant: "secondary", size: "sm" }))}

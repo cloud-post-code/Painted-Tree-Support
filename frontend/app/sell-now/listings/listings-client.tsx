@@ -83,7 +83,7 @@ function ListingBoardCard({ listing, showCostTier }: { listing: Listing; showCos
   const hero =
     listing.hero_image_url && !heroBroken ? listing.hero_image_url : null;
   const tier = COST_LABELS[listing.cost_tier] || listing.cost_tier;
-  const catLabel = CATEGORY_LABELS[listing.category || "general"] || "General";
+  const catLabel = CATEGORY_LABELS[listing.category || "general"] || listing.category || "General";
   const typeLabel = listing.type === "booth_offer" ? "Space available" : "Seeking space";
   const locationLine = `${listing.location_city}, ${listing.location_state}`;
 
@@ -275,14 +275,7 @@ export function ListingsClient() {
           </div>
           <div>
             <Label>Category</Label>
-            <select name="category" className="mt-1 w-full rounded-lg border border-black/15 p-2" required>
-              <option value="general">General</option>
-              <option value="food">Food & beverage</option>
-              <option value="retail">Retail / goods</option>
-              <option value="crafts">Arts & crafts</option>
-              <option value="services">Services / venue</option>
-              <option value="beauty">Beauty & wellness</option>
-            </select>
+            <Input name="category" placeholder="Any category (optional)" className="mt-1" />
           </div>
           <div>
             <Label>Name / space</Label>

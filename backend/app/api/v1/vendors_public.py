@@ -43,13 +43,6 @@ class VendorCreate(BaseModel):
     submitted_email: EmailStr | None = None
     hcaptcha_token: str | None = None
 
-    @field_validator("category", mode="before")
-    @classmethod
-    def category_normalized(cls, v: object) -> str:
-        allowed = frozenset({"jewelry", "food", "clothing", "art", "beauty", "home", "other"})
-        s = (str(v).strip().lower() if v is not None else "") or "other"
-        return s if s in allowed else "other"
-
     @field_validator("city", "state", "bio_150", mode="after")
     @classmethod
     def empty_str_to_none(cls, v: str | None) -> str | None:
@@ -61,7 +54,7 @@ class VendorCreate(BaseModel):
 
 class VendorUpdateRequest(BaseModel):
     brand_name: str | None = None
-    category: str | None = Field(None, pattern="^(jewelry|food|clothing|art|beauty|home|other)$")
+    category: str | None = Field(None, max_length=64)
     city: str | None = None
     state: str | None = None
     bio_150: str | None = Field(None, max_length=160)
