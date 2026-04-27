@@ -2,10 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { ExternalLink, UserCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { buttonVariants } from "@/components/ui/button";
 import { trackEvent } from "@/lib/analytics";
 import { apiUrl, readResponseBodyJson, resolveMediaUrl } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 export type Vendor = {
   id: number;
@@ -72,9 +75,12 @@ function VendorListCard({ v }: { v: Vendor }) {
           </div>
         ) : (
           <div
-            className="aspect-[2/1] w-full bg-gradient-to-br from-[var(--vrr-teal)]/15 to-black/[0.04]"
-            aria-hidden
-          />
+            className="flex aspect-[2/1] w-full items-center justify-center bg-gradient-to-br from-[var(--vrr-teal)]/15 to-black/[0.04]"
+            role="img"
+            aria-label="No listing image"
+          >
+            <UserCircle className="h-[4.5rem] w-[4.5rem] text-black/25" strokeWidth={1.15} aria-hidden />
+          </div>
         )}
       </div>
 
@@ -110,18 +116,25 @@ function VendorListCard({ v }: { v: Vendor }) {
           </div>
         ) : null}
         {v.website ? (
-          <div className="mt-4 border-t border-black/10 pt-3">
+          <div className="mt-5 border-t border-black/[0.08] pt-4">
             <a
               href={v.website}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex text-sm font-semibold text-[var(--vrr-teal)] hover:underline"
+              className={cn(
+                buttonVariants({ variant: "default", size: "default" }),
+                "w-full rounded-xl shadow-sm ring-1 ring-black/[0.04] transition-[box-shadow,transform] hover:shadow-md hover:ring-black/[0.06] active:scale-[0.99]",
+              )}
               onClick={() =>
                 trackEvent("external_link_click", { url: v.website || "", context: "vendor_card_website" })
               }
             >
-              Visit website
+              <span>Visit website</span>
+              <ExternalLink className="opacity-90" aria-hidden />
             </a>
+            <p className="mt-2 text-center text-[11px] font-medium tracking-wide text-black/45">
+              Opens in a new tab
+            </p>
           </div>
         ) : null}
       </div>
