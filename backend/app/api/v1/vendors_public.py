@@ -13,40 +13,54 @@ from app.limiter import limiter
 from app.models.vendor import Vendor
 from app.services.captcha import verify_hcaptcha
 from app.services.vendor_images import allowed_vendor_asset_url, process_vendor_image, save_vendor_jpeg
-from app.services.vendor_product_sync import sync_vendor_legacy_from_product
 
 router = APIRouter(prefix="/vendors", tags=["vendors"])
 
 
-class ShopLink(BaseModel):
-    label: str = Field(max_length=64)
-    url: str = Field(max_length=2048)
+def _clean_categories(values: list[str] | None) -> list[str]:
+    if not values:
+        return []
+    seen: set[str] = set()
+    out: list[str] = []
+    for raw in values:
+        if raw is None:
+            continue
+        v = str(raw).strip()[:120]
+        if not v:
+            continue
+        key = v.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(v)
+        if len(out) >= 16:
+            break
+    return out
 
 
 class VendorCreate(BaseModel):
-    """Public survey: exactly the eight product fields (camelCase in JSON) plus optional shop links and email."""
+    """Public submit survey: the canonical 8-field listing plus email + captcha."""
 
     model_config = ConfigDict(str_strip_whitespace=True, populate_by_name=True)
 
-    product_name: str = Field(..., alias="productName", min_length=1, max_length=255)
-    product_description: str | None = Field(None, alias="productDescription")
-    product_price: str | None = Field(None, alias="productPrice", max_length=64)
-    product_category: str = Field("other", alias="productCategory", max_length=64)
-    product_stock: str | None = Field(None, alias="productStock", max_length=32)
-    product_image: str | None = Field(None, alias="productImage", max_length=2048)
-    product_brand: str | None = Field(None, alias="productBrand", max_length=255)
-    product_rating: str | None = Field(None, alias="productRating", max_length=32)
-    shop_links: list[ShopLink] = Field(default_factory=list, max_length=4)
+    name: str = Field(..., min_length=1, max_length=255)
+    categories: list[str] = Field(default_factory=list)
+    description: str | None = None
+    previous_pt_location: str | None = Field(None, alias="previousPtLocation")
+    current_location: str | None = Field(None, alias="currentLocation")
+    logo_url: str | None = Field(None, alias="logoUrl", max_length=2048)
+    hero_url: str | None = Field(None, alias="heroUrl", max_length=2048)
+    website: str | None = Field(None, max_length=2048)
     submitted_email: EmailStr | None = None
     hcaptcha_token: str | None = None
 
     @field_validator(
-        "product_description",
-        "product_price",
-        "product_stock",
-        "product_image",
-        "product_brand",
-        "product_rating",
+        "description",
+        "previous_pt_location",
+        "current_location",
+        "logo_url",
+        "hero_url",
+        "website",
         mode="after",
     )
     @classmethod
@@ -60,15 +74,14 @@ class VendorCreate(BaseModel):
 class VendorUpdateRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    product_name: str | None = Field(None, alias="productName", max_length=255)
-    product_description: str | None = Field(None, alias="productDescription")
-    product_price: str | None = Field(None, alias="productPrice", max_length=64)
-    product_category: str | None = Field(None, alias="productCategory", max_length=64)
-    product_stock: str | None = Field(None, alias="productStock", max_length=32)
-    product_image: str | None = Field(None, alias="productImage", max_length=2048)
-    product_brand: str | None = Field(None, alias="productBrand", max_length=255)
-    product_rating: str | None = Field(None, alias="productRating", max_length=32)
-    shop_links: list[ShopLink] | None = None
+    name: str | None = Field(None, max_length=255)
+    categories: list[str] | None = None
+    description: str | None = None
+    previous_pt_location: str | None = Field(None, alias="previousPtLocation")
+    current_location: str | None = Field(None, alias="currentLocation")
+    logo_url: str | None = Field(None, alias="logoUrl", max_length=2048)
+    hero_url: str | None = Field(None, alias="heroUrl", max_length=2048)
+    website: str | None = Field(None, max_length=2048)
     submitted_email: EmailStr
     note: str | None = None
     hcaptcha_token: str | None = None
@@ -87,32 +100,26 @@ class RemovalConfirmBody(BaseModel):
 async def list_vendors(
     db: AsyncSession = Depends(get_db),
     search: str | None = None,
-    category: str | None = None,
-    state: str | None = None,
     featured: bool | None = None,
 ) -> list[dict]:
     q = select(Vendor).where(Vendor.status == "published")
-    if category:
-        q = q.where(Vendor.category == category)
-    if state:
-        q = q.where(Vendor.state == state)
     if featured is not None:
         q = q.where(Vendor.featured.is_(featured))
-    q = q.order_by(Vendor.featured.desc(), Vendor.product_name)
+    q = q.order_by(Vendor.featured.desc(), Vendor.name)
     rows = (await db.execute(q)).scalars().all()
     out = [_vendor_public(r) for r in rows]
     if search:
         s = search.lower()
 
         def _haystack(vendor: dict) -> str:
+            cats = vendor.get("categories") or []
             parts: list[str] = [
-                vendor.get("productName") or "",
-                vendor.get("productBrand") or "",
-                vendor.get("productDescription") or "",
-                vendor.get("productCategory") or "",
-                vendor.get("productPrice") or "",
-                vendor.get("productStock") or "",
-                vendor.get("productRating") or "",
+                vendor.get("name") or "",
+                vendor.get("description") or "",
+                vendor.get("previousPtLocation") or "",
+                vendor.get("currentLocation") or "",
+                vendor.get("website") or "",
+                " ".join(str(c) for c in cats),
                 str(vendor.get("id") or ""),
             ]
             return " ".join(parts).lower()
@@ -133,15 +140,14 @@ def _strip_opt(s: str | None, max_len: int) -> str | None:
 def _vendor_public(v: Vendor) -> dict:
     return {
         "id": v.id,
-        "productName": v.product_name,
-        "productDescription": v.product_description,
-        "productPrice": v.product_price,
-        "productCategory": v.product_category,
-        "productStock": v.product_stock,
-        "productImage": v.product_image,
-        "productBrand": v.product_brand,
-        "productRating": v.product_rating,
-        "shopLinks": v.shop_links or [],
+        "name": v.name,
+        "categories": list(v.categories or []),
+        "description": v.description,
+        "previousPtLocation": v.previous_pt_location,
+        "currentLocation": v.current_location,
+        "logoUrl": v.logo_url,
+        "heroUrl": v.hero_url,
+        "website": v.website,
         "featured": v.featured,
     }
 
@@ -166,13 +172,15 @@ async def upload_vendor_image(
     file: UploadFile = File(...),
 ) -> dict:
     _ = request
-    if kind not in ("logo", "banner"):
-        raise HTTPException(status_code=400, detail="kind must be logo or banner")
+    if kind not in ("logo", "hero"):
+        raise HTTPException(status_code=400, detail="kind must be logo or hero")
     raw = await file.read()
     if not raw:
         raise HTTPException(status_code=400, detail="Empty file")
+    # The image processor still uses the historical "banner" label for the wide aspect ratio.
+    proc_kind = "logo" if kind == "logo" else "banner"
     try:
-        jpeg = process_vendor_image(raw, kind)
+        jpeg = process_vendor_image(raw, proc_kind)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except OSError as e:
@@ -182,16 +190,6 @@ async def upload_vendor_image(
     except OSError as e:
         raise HTTPException(status_code=500, detail="Could not store image") from e
     return {"url": url}
-
-
-@router.get("/{vendor_id}")
-async def get_vendor(vendor_id: int, db: AsyncSession = Depends(get_db)) -> dict:
-    v = (
-        await db.execute(select(Vendor).where(Vendor.id == vendor_id, Vendor.status == "published"))
-    ).scalar_one_or_none()
-    if not v:
-        raise HTTPException(status_code=404, detail="Not found")
-    return _vendor_public(v)
 
 
 @router.post("")
@@ -214,27 +212,24 @@ async def create_vendor(
         raise HTTPException(status_code=400, detail="Invalid email")
     if not await verify_hcaptcha(body.hcaptcha_token, request.client.host if request.client else None):
         raise HTTPException(status_code=400, detail="Captcha failed")
-    links = [x.model_dump() for x in body.shop_links][:4]
-    img = _validated_asset_url(body.product_image)
-    pn = body.product_name.strip()[:255]
-    pc = (body.product_category or "other").strip()[:64] or "other"
+
+    name = body.name.strip()[:255]
+    if not name:
+        raise HTTPException(status_code=400, detail="name is required")
+
     row = Vendor(
-        product_name=pn,
-        product_description=_strip_opt(body.product_description, 65535),
-        product_price=_strip_opt(body.product_price, 64),
-        product_category=pc,
-        product_stock=_strip_opt(body.product_stock, 32),
-        product_image=img,
-        product_brand=_strip_opt(body.product_brand, 255),
-        product_rating=_strip_opt(body.product_rating, 32),
-        brand_name=pn,
-        category=pc,
-        shop_links=links,
+        name=name,
+        categories=_clean_categories(body.categories),
+        description=_strip_opt(body.description, 65535),
+        previous_pt_location=_strip_opt(body.previous_pt_location, 65535),
+        current_location=_strip_opt(body.current_location, 65535),
+        logo_url=_validated_asset_url(body.logo_url),
+        hero_url=_validated_asset_url(body.hero_url),
+        website=_strip_opt(body.website, 2048),
         submitted_email=submitted_email,
         status="pending",
         user_id=user.id if user else None,
     )
-    sync_vendor_legacy_from_product(row)
     db.add(row)
     await db.commit()
     await db.refresh(row)
@@ -256,8 +251,6 @@ async def vendor_update_request(
         raise HTTPException(status_code=403, detail="Email does not match")
     if not await verify_hcaptcha(body.hcaptcha_token, request.client.host if request.client else None):
         raise HTTPException(status_code=400, detail="Captcha failed")
-    # Store pending update as JSON in site_settings or append note - MVP: log to a simple VendorUpdateRequest table
-    # For MVP we use SiteSetting with key prefix vendor_update_
     from app.models.site_setting import SiteSetting
 
     payload = body.model_dump(exclude={"hcaptcha_token"}, exclude_none=True)

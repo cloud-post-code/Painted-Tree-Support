@@ -9,9 +9,28 @@ import { Textarea } from "@/components/ui/textarea";
 import { readResponseBodyJson } from "@/lib/api";
 import { useCurrentUser } from "@/lib/use-current-user";
 
+function splitCategories(raw: string): string[] {
+  if (!raw) return [];
+  const parts = raw
+    .split(/[\n,|]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const p of parts) {
+    const key = p.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(p.slice(0, 120));
+    if (out.length >= 16) break;
+  }
+  return out;
+}
+
 export default function VendorSubmitPage() {
   const [msg, setMsg] = useState("");
-  const [productImage, setProductImage] = useState<string | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [heroUrl, setHeroUrl] = useState<string | null>(null);
   const { user, loading } = useCurrentUser();
   const isAuthed = !!user;
 
@@ -19,12 +38,12 @@ export default function VendorSubmitPage() {
     <div className="mx-auto max-w-xl px-4 py-10 sm:px-6">
       <h1 className="text-2xl font-bold">Submit your vendor listing</h1>
       <p className="mt-2 text-sm text-black/70">
-        Use the eight product fields below (same names as our CSV template). Only <strong>productName</strong> is
-        required. Profiles are reviewed before going live.
+        Use the eight fields below (same names as our CSV template). Only <strong>Name</strong> is required.
+        Listings are reviewed before going live.
       </p>
       {isAuthed && (
         <p className="mt-3 rounded-md bg-[var(--vrr-cream)] px-3 py-2 text-sm">
-          Signed in as <strong>{user.email}</strong>. This profile will be linked to your account.
+          Signed in as <strong>{user.email}</strong>. This listing will be linked to your account.
         </p>
       )}
       <form
@@ -32,21 +51,20 @@ export default function VendorSubmitPage() {
         onSubmit={async (e) => {
           e.preventDefault();
           const fd = new FormData(e.currentTarget);
-          const productName = String(fd.get("productName") || "").trim();
-          if (!productName) {
-            setMsg("Please enter productName.");
+          const name = String(fd.get("name") || "").trim();
+          if (!name) {
+            setMsg("Please enter a Name.");
             return;
           }
           const body: Record<string, unknown> = {
-            productName,
-            productDescription: String(fd.get("productDescription") || "").trim() || null,
-            productPrice: String(fd.get("productPrice") || "").trim() || null,
-            productCategory: String(fd.get("productCategory") || "").trim() || "other",
-            productStock: String(fd.get("productStock") || "").trim() || null,
-            productImage,
-            productBrand: String(fd.get("productBrand") || "").trim() || null,
-            productRating: String(fd.get("productRating") || "").trim() || null,
-            shop_links: [],
+            name,
+            categories: splitCategories(String(fd.get("categories") || "")),
+            description: String(fd.get("description") || "").trim() || null,
+            previousPtLocation: String(fd.get("previousPtLocation") || "").trim() || null,
+            currentLocation: String(fd.get("currentLocation") || "").trim() || null,
+            logoUrl,
+            heroUrl,
+            website: String(fd.get("website") || "").trim() || null,
             hcaptcha_token: null,
           };
           if (!isAuthed) {
@@ -71,40 +89,64 @@ export default function VendorSubmitPage() {
         }}
       >
         <div>
-          <Label htmlFor="productName">productName</Label>
-          <Input id="productName" name="productName" required className="mt-1" />
+          <Label htmlFor="name">Name</Label>
+          <Input id="name" name="name" required className="mt-1" autoComplete="organization" />
         </div>
         <div>
-          <Label htmlFor="productDescription">productDescription</Label>
-          <Textarea id="productDescription" name="productDescription" rows={4} className="mt-1" />
+          <Label htmlFor="categories">Categories</Label>
+          <Textarea
+            id="categories"
+            name="categories"
+            rows={3}
+            className="mt-1"
+            placeholder="One per line — or separate with | or commas. e.g.&#10;Apparel&#10;Accessories"
+          />
+          <p className="mt-1 text-xs text-black/55">
+            Up to 16 short labels. They appear as chips on your card.
+          </p>
+        </div>
+        <div>
+          <Label htmlFor="description">Description</Label>
+          <Textarea id="description" name="description" rows={4} className="mt-1" />
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
-            <Label htmlFor="productPrice">productPrice</Label>
-            <Input id="productPrice" name="productPrice" className="mt-1" placeholder="e.g. 19.99" />
+            <Label htmlFor="previousPtLocation">Previous PT Location</Label>
+            <Input
+              id="previousPtLocation"
+              name="previousPtLocation"
+              className="mt-1"
+              placeholder="e.g. Painted Tree Phoenix, AZ"
+            />
           </div>
           <div>
-            <Label htmlFor="productCategory">productCategory</Label>
-            <Input id="productCategory" name="productCategory" className="mt-1" placeholder="e.g. Electronics" />
+            <Label htmlFor="currentLocation">Current Location</Label>
+            <Input
+              id="currentLocation"
+              name="currentLocation"
+              className="mt-1"
+              placeholder="e.g. Online only / Tempe, AZ"
+            />
           </div>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <Label htmlFor="productStock">productStock</Label>
-            <Input id="productStock" name="productStock" className="mt-1" placeholder="e.g. 50" />
-          </div>
-          <div>
-            <Label htmlFor="productBrand">productBrand</Label>
-            <Input id="productBrand" name="productBrand" className="mt-1" />
-          </div>
-        </div>
-        <div>
-          <Label htmlFor="productRating">productRating</Label>
-          <Input id="productRating" name="productRating" className="mt-1" placeholder="e.g. 4.8" />
         </div>
         <div className="rounded-lg border border-black/10 bg-black/[0.02] p-4 space-y-4">
-          <p className="text-sm font-medium text-black/80">productImage (optional — URL or upload)</p>
-          <VendorImageUpload kind="banner" value={productImage} onChange={setProductImage} />
+          <p className="text-sm font-medium text-black/80">Logo (optional — URL or upload)</p>
+          <VendorImageUpload kind="logo" value={logoUrl} onChange={setLogoUrl} />
+        </div>
+        <div className="rounded-lg border border-black/10 bg-black/[0.02] p-4 space-y-4">
+          <p className="text-sm font-medium text-black/80">Hero / banner image (optional — URL or upload)</p>
+          <VendorImageUpload kind="hero" value={heroUrl} onChange={setHeroUrl} />
+        </div>
+        <div>
+          <Label htmlFor="website">Website</Label>
+          <Input
+            id="website"
+            name="website"
+            type="url"
+            inputMode="url"
+            className="mt-1"
+            placeholder="https://your-store.example.com"
+          />
         </div>
         {!isAuthed && !loading && (
           <div>

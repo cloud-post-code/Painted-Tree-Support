@@ -7,71 +7,67 @@ import { Label } from "@/components/ui/label";
 import { trackEvent } from "@/lib/analytics";
 import { apiUrl, readResponseBodyJson, resolveMediaUrl } from "@/lib/api";
 
-type ShopLink = { label: string; url: string };
-
 export type Vendor = {
   id: number;
-  productName: string;
-  productDescription?: string | null;
-  productPrice?: string | null;
-  productCategory: string;
-  productStock?: string | null;
-  productImage?: string | null;
-  productBrand?: string | null;
-  productRating?: string | null;
-  shopLinks: ShopLink[];
+  name: string;
+  categories: string[];
+  description?: string | null;
+  previousPtLocation?: string | null;
+  currentLocation?: string | null;
+  logoUrl?: string | null;
+  heroUrl?: string | null;
+  website?: string | null;
   featured?: boolean;
 };
 
 function vendorSearchHaystack(v: Vendor): string {
   const parts = [
-    v.productName,
-    v.productBrand || "",
-    v.productDescription || "",
-    v.productCategory || "",
-    v.productPrice || "",
-    v.productStock || "",
-    v.productRating || "",
+    v.name,
+    v.description || "",
+    v.previousPtLocation || "",
+    v.currentLocation || "",
+    v.website || "",
+    (v.categories || []).join(" "),
     String(v.id),
   ];
   return parts.join(" ").toLowerCase();
 }
 
-function categoryLabels(v: Vendor): string[] {
-  return [v.productCategory.charAt(0).toUpperCase() + v.productCategory.slice(1)];
-}
-
-/** First https link from shopLinks, preferring online / shop-style labels. */
-function primaryVendorStoreUrl(links: ShopLink[] | undefined): string | null {
-  const valid = (links || []).filter((l) => {
-    const u = (l.url || "").trim();
-    return u.startsWith("http://") || u.startsWith("https://");
-  });
-  if (!valid.length) return null;
-  const online = valid.find((l) => /online|website|web|store|shop|etsy|instagram/i.test(l.label));
-  return (online || valid[0]).url.trim();
-}
-
 function VendorListCard({ v }: { v: Vendor }) {
-  const [imgErr, setImgErr] = useState(false);
-  const imgSrc = resolveMediaUrl(v.productImage);
-  const hasImg = Boolean(v.productImage && imgSrc && !imgErr);
-  const storeUrl = primaryVendorStoreUrl(v.shopLinks);
+  const [heroErr, setHeroErr] = useState(false);
+  const [logoErr, setLogoErr] = useState(false);
+  const heroSrc = resolveMediaUrl(v.heroUrl);
+  const logoSrc = resolveMediaUrl(v.logoUrl);
+  const showHero = Boolean(v.heroUrl && heroSrc && !heroErr);
+  const showLogoFallback = !showHero && Boolean(v.logoUrl && logoSrc && !logoErr);
 
   return (
     <li className="overflow-hidden rounded-xl border border-black/10 bg-white shadow-sm">
       <div className="relative">
-        {hasImg ? (
+        {showHero ? (
           <div className="aspect-[2/1] w-full overflow-hidden bg-gradient-to-br from-[var(--vrr-cream)] to-black/10">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={imgSrc!}
+              src={heroSrc!}
               alt=""
               className="h-full w-full object-cover object-center"
               loading="lazy"
               decoding="async"
               referrerPolicy="no-referrer"
-              onError={() => setImgErr(true)}
+              onError={() => setHeroErr(true)}
+            />
+          </div>
+        ) : showLogoFallback ? (
+          <div className="flex aspect-[2/1] w-full items-center justify-center overflow-hidden bg-gradient-to-br from-[var(--vrr-cream)] to-black/10 p-6">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={logoSrc!}
+              alt=""
+              className="max-h-full max-w-full object-contain"
+              loading="lazy"
+              decoding="async"
+              referrerPolicy="no-referrer"
+              onError={() => setLogoErr(true)}
             />
           </div>
         ) : (
@@ -84,39 +80,47 @@ function VendorListCard({ v }: { v: Vendor }) {
 
       <div className="p-4">
         <div className="min-w-0">
-          <Link href={`/vendors/${v.id}`} className="text-lg font-semibold text-[var(--vrr-teal)] hover:underline">
-            {v.productName}
-          </Link>
-          {v.productBrand ? <p className="text-sm text-black/70">{v.productBrand}</p> : null}
-          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-black/60">
-            {v.productPrice ? <span>Price: {v.productPrice}</span> : null}
-            {v.productStock ? <span>Stock: {v.productStock}</span> : null}
-            {v.productRating ? <span>Rating: {v.productRating}</span> : null}
-          </div>
-          {v.productDescription?.trim() ? (
-            <p className="mt-2 text-sm line-clamp-3">{v.productDescription}</p>
+          <h3 className="text-lg font-semibold text-[var(--vrr-teal)]">{v.name}</h3>
+          {v.description?.trim() ? (
+            <p className="mt-2 text-sm text-black/80 line-clamp-3">{v.description}</p>
           ) : null}
+          <div className="mt-3 space-y-1 text-xs text-black/60">
+            {v.previousPtLocation ? (
+              <p>
+                <span className="font-semibold text-black/70">Previous PT:</span> {v.previousPtLocation}
+              </p>
+            ) : null}
+            {v.currentLocation ? (
+              <p>
+                <span className="font-semibold text-black/70">Current location:</span> {v.currentLocation}
+              </p>
+            ) : null}
+          </div>
         </div>
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {categoryLabels(v).slice(0, 12).map((c, i) => (
-            <span
-              key={`${v.id}-${i}-${c}`}
-              className="rounded-full border border-black/10 bg-black/[0.03] px-2.5 py-0.5 text-xs text-black/75"
-            >
-              {c}
-            </span>
-          ))}
-        </div>
-        {storeUrl ? (
+        {v.categories?.length ? (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {v.categories.map((c, i) => (
+              <span
+                key={`${v.id}-${i}-${c}`}
+                className="rounded-full border border-black/10 bg-black/[0.03] px-2.5 py-0.5 text-xs text-black/75"
+              >
+                {c}
+              </span>
+            ))}
+          </div>
+        ) : null}
+        {v.website ? (
           <div className="mt-4 border-t border-black/10 pt-3">
             <a
-              href={storeUrl}
+              href={v.website}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex text-sm font-semibold text-[var(--vrr-teal)] hover:underline"
-              onClick={() => trackEvent("external_link_click", { url: storeUrl, context: "vendor_card_store" })}
+              onClick={() =>
+                trackEvent("external_link_click", { url: v.website || "", context: "vendor_card_website" })
+              }
             >
-              Visit their store
+              Visit website
             </a>
           </div>
         ) : null}
@@ -157,16 +161,13 @@ export default function VendorsPage() {
     return rows.filter((v) => {
       const catQ = cat.trim().toLowerCase();
       if (catQ) {
-        const main = (v.productCategory || "").toLowerCase();
-        const inLabels = categoryLabels(v).some((c) => c.toLowerCase().includes(catQ));
-        if (!main.includes(catQ) && !inLabels) {
+        const inCats = (v.categories || []).some((c) => c.toLowerCase().includes(catQ));
+        if (!inCats) {
           return false;
         }
       }
       if (q) {
-        const s = q.toLowerCase();
-        const inCats = categoryLabels(v).some((c) => c.toLowerCase().includes(s));
-        if (!vendorSearchHaystack(v).includes(s) && !inCats) {
+        if (!vendorSearchHaystack(v).includes(q.toLowerCase())) {
           return false;
         }
       }
@@ -191,23 +192,27 @@ export default function VendorsPage() {
           <Input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Name, brand, description, price…"
+            placeholder="Name, description, location…"
             className="mt-1"
           />
         </div>
         <div>
-          <Label htmlFor="vendor-cat">productCategory</Label>
+          <Label htmlFor="vendor-cat">Category</Label>
           <Input
             id="vendor-cat"
             value={cat}
             onChange={(e) => setCat(e.target.value)}
-            placeholder="e.g. electronics, gifts…"
+            placeholder="e.g. jewelry, food, art…"
             className="mt-1"
             autoComplete="off"
           />
         </div>
       </div>
-      {loadErr ? <p className="mt-6 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">{loadErr}</p> : null}
+      {loadErr ? (
+        <p className="mt-6 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+          {loadErr}
+        </p>
+      ) : null}
       <ul className="mt-10 grid gap-4 sm:grid-cols-2">
         {filtered.map((v) => (
           <VendorListCard key={v.id} v={v} />

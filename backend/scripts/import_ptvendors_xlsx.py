@@ -1,18 +1,26 @@
-"""One-time (or repeatable) import of vendor rows from pt_vendors.xlsx into the database.
+"""Import vendor rows from ``pt_vendors.xlsx`` into the canonical 8-field model.
 
-Expects columns: Name, Categories, Description, Previous PT Location, Current Location,
-Logo URL, Hero/Banner URL, Website
+Expected columns: Name, Categories, Description, Previous PT Location, Current Location,
+Logo URL, Hero/Banner URL, Website.
 
-  cd backend && pip install openpyxl   # or: pip install -e ".[dev]"
-  PYTHONPATH=. python3 scripts/import_ptvendors_xlsx.py
-  PYTHONPATH=. python3 scripts/import_ptvendors_xlsx.py --file /path/to/pt_vendors.xlsx --refresh
+Categories are split on ``|``, ``,``, or newline.
+Existing rows are matched case-insensitively by ``Name``.
+
+For ad-hoc imports prefer the admin CSV importer at
+``POST /api/v1/admin/manage/vendors/import-csv`` (or "Upload & import" on
+``/admin/vendors``). This script remains for the recurring xlsx workflow.
+
+Usage::
+
+    cd backend && pip install openpyxl
+    PYTHONPATH=. python3 scripts/import_ptvendors_xlsx.py
+    PYTHONPATH=. python3 scripts/import_ptvendors_xlsx.py --file /path/to/pt_vendors.xlsx --refresh
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
-import importlib.util
 import re
 import sys
 from pathlib import Path
@@ -23,29 +31,8 @@ from sqlalchemy import func, select
 
 from app.db.session import AsyncSessionLocal
 from app.models.vendor import Vendor
-from app.services.vendor_product_sync import sync_vendor_legacy_from_product
 
 DEFAULT_XLSX = Path(__file__).resolve().parents[1] / "data" / "pt_vendors.xlsx"
-
-
-def _load_json_importer():
-    path = Path(__file__).resolve().parent / "import_ptvendors.py"
-    spec = importlib.util.spec_from_file_location("_ipt", path)
-    if spec is None or spec.loader is None:
-        raise RuntimeError("Cannot load import_ptvendors.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-_ipt = _load_json_importer()
-bio_150_from = _ipt.bio_150_from
-map_category = _ipt.map_category
-US_STATES = _ipt.US_STATES
-
-
-def is_xlsx_source_vendor(v: Vendor) -> bool:
-    return (v.submitted_email or "").startswith("xlsx-import")
 
 
 def cell_at(row: tuple[object, ...], i: int | None) -> object | None:
@@ -54,57 +41,37 @@ def cell_at(row: tuple[object, ...], i: int | None) -> object | None:
     return row[i]
 
 
-def slug_from_label(label: str) -> str:
-    s = label.lower().replace("'", "")
-    s = s.replace("&", " ")
-    s = re.sub(r"[^a-z0-9]+", "-", s).strip("-")
-    return s
-
-
-def map_category_from_categories_cell(cell: str | None) -> str:
-    if not cell or not str(cell).strip():
-        return "other"
-    parts = [p.strip() for p in str(cell).split("|") if p.strip()]
-    listing = {"categories": [{"slug": slug_from_label(p), "name": p} for p in parts]}
-    return map_category(listing)
-
-
-def guess_city_state_long(loc_text: str | None) -> tuple[str, str]:
-    """Like guess_city_state but uses the full location string (no 255-char join cap)."""
-    if not loc_text or not str(loc_text).strip():
-        return "Various", "US"
-    joined = str(loc_text).strip()
-    blob = joined.lower()
-    for name, abbr in US_STATES.items():
-        if name in blob:
-            city = joined.split(",")[0].strip()[:255] or "Various"
-            return city, abbr
-    m = re.search(r",\s*([A-Za-z .]{2,30})$", joined)
-    if m:
-        tail = m.group(1).strip().lower()
-        if tail in US_STATES:
-            return joined.split(",")[0].strip()[:255] or "Various", US_STATES[tail]
-    return (joined[:255] if joined else "Various"), "US"
-
-
-def parse_category_names(cell: str | None) -> list[str] | None:
-    if not cell or not str(cell).strip():
-        return None
-    parts = [p.strip() for p in str(cell).split("|") if p.strip()]
-    return parts or None
-
-
-def parse_current_location(cell: str | None) -> list[str] | None:
-    if cell is None or (isinstance(cell, str) and not cell.strip()):
-        return None
+def split_categories(cell: object | None) -> list[str]:
+    if cell is None:
+        return []
     raw = str(cell).strip()
-    raw = re.sub(r"^current:\s*", "", raw, flags=re.I).strip()
     if not raw:
+        return []
+    raw = raw.replace("\r", "\n")
+    for sep in ("|", "\n", ","):
+        raw = raw.replace(sep, "|")
+    parts = [p.strip() for p in raw.split("|") if p.strip()]
+    out: list[str] = []
+    seen: set[str] = set()
+    for p in parts:
+        key = p.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(p[:120])
+        if len(out) >= 16:
+            break
+    return out
+
+
+def cell_text(cell: object | None) -> str | None:
+    if cell is None:
         return None
-    return [raw]
+    text = re.sub(r"\s+\n", "\n", str(cell)).strip()
+    return text or None
 
 
-def norm_url(val: object) -> str | None:
+def norm_url(val: object | None) -> str | None:
     if val is None:
         return None
     s = str(val).strip()
@@ -113,15 +80,7 @@ def norm_url(val: object) -> str | None:
     return s[:2048]
 
 
-def shop_links(website: str | None) -> list[dict[str, str]]:
-    out: list[dict[str, str]] = []
-    w = norm_url(website)
-    if w:
-        out.append({"label": "Website", "url": w})
-    return out
-
-
-def normalize_brand_key(name: str) -> str:
+def normalize_name(name: str) -> str:
     return re.sub(r"\s+", " ", name.strip()).lower()
 
 
@@ -136,7 +95,7 @@ async def main() -> None:
     ap.add_argument(
         "--refresh",
         action="store_true",
-        help="Update existing rows that match the same brand name (case-insensitive, trimmed).",
+        help="Update existing rows that match the same name (case-insensitive, trimmed).",
     )
     args = ap.parse_args()
 
@@ -165,7 +124,7 @@ async def main() -> None:
     i_prev = col("previous pt location", "previous pt")
     i_curr = col("current location")
     i_logo = col("logo url", "logo")
-    i_hero = col("hero/banner url", "hero/banner url", "banner url", "hero")
+    i_hero = col("hero/banner url", "hero url", "banner url", "hero")
     i_web = col("website")
     if i_name is None:
         raise SystemExit(f"Could not find Name column in header: {header}")
@@ -180,59 +139,29 @@ async def main() -> None:
             name = cell_at(row, i_name)
             if name is None or not str(name).strip():
                 continue
-            brand = str(name).strip()[:255]
-            key = normalize_brand_key(brand)
+            display_name = str(name).strip()[:255]
+            key = normalize_name(display_name)
             existing = (
                 await db.execute(
-                    select(Vendor).where(func.lower(func.trim(Vendor.brand_name)) == key)
+                    select(Vendor).where(func.lower(func.trim(Vendor.name)) == key)
                 )
             ).scalar_one_or_none()
 
-            cats_cell = cell_at(row, i_cat)
-            desc = cell_at(row, i_desc)
-            prev = cell_at(row, i_prev)
-            curr = cell_at(row, i_curr)
-            logo = cell_at(row, i_logo)
-            hero = cell_at(row, i_hero)
-            web = cell_at(row, i_web)
-
-            prev_str = str(prev).strip() if prev is not None and str(prev).strip() else ""
-            prev_list = [prev_str] if prev_str else None
-            city, state = guess_city_state_long(prev_str if prev_str else None)
-
-            desc_full = str(desc).strip() if desc is not None and str(desc).strip() else None
-            pt_names = parse_category_names(str(cats_cell) if cats_cell is not None else None)
-            curr_list = parse_current_location(curr)
-
-            cat = map_category_from_categories_cell(str(cats_cell) if cats_cell else None)
-            img = norm_url(hero) or norm_url(logo)
             payload = {
-                "product_name": brand,
-                "product_description": desc_full,
-                "product_category": cat,
-                "product_image": img,
-                "product_brand": brand,
-                "brand_name": brand,
-                "category": cat,
-                "city": city[:255],
-                "state": state[:8],
-                "bio_150": bio_150_from(desc_full),
-                "description_full": desc_full,
-                "pt_category_names": pt_names,
-                "pt_current_locations": curr_list,
-                "logo_url": img,
-                "banner_url": img,
-                "pt_previous_locations": prev_list,
-                "shop_links": shop_links(web),
-                "pt_listing_id": None,
-                "featured": False,
+                "name": display_name,
+                "categories": split_categories(cell_at(row, i_cat)),
+                "description": cell_text(cell_at(row, i_desc)),
+                "previous_pt_location": cell_text(cell_at(row, i_prev)),
+                "current_location": cell_text(cell_at(row, i_curr)),
+                "logo_url": norm_url(cell_at(row, i_logo)),
+                "hero_url": norm_url(cell_at(row, i_hero)),
+                "website": norm_url(cell_at(row, i_web)),
             }
 
             if existing:
-                if args.refresh and is_xlsx_source_vendor(existing):
+                if args.refresh:
                     for k, v in payload.items():
                         setattr(existing, k, v)
-                    sync_vendor_legacy_from_product(existing)
                     if existing.status == "pending":
                         existing.status = "published"
                     updated += 1
@@ -240,40 +169,23 @@ async def main() -> None:
                     skipped += 1
                 continue
 
-            v = Vendor(
-                product_name=payload["product_name"],
-                product_description=payload["product_description"],
-                product_category=payload["product_category"],
-                product_image=payload["product_image"],
-                product_brand=payload["product_brand"],
-                brand_name=payload["brand_name"],
-                category=payload["category"],
-                city=payload["city"],
-                state=payload["state"],
-                bio_150=payload["bio_150"],
-                description_full=payload["description_full"],
-                pt_category_names=payload["pt_category_names"],
-                pt_current_locations=payload["pt_current_locations"],
-                logo_url=payload["logo_url"],
-                banner_url=payload["banner_url"],
-                pt_previous_locations=payload["pt_previous_locations"],
-                shop_links=payload["shop_links"],
-                pt_listing_id=None,
-                submitted_email=f"xlsx-import-{row_no}@example.com",
-                status="published",
-                featured=False,
+            db.add(
+                Vendor(
+                    submitted_email=f"xlsx-import-{row_no}@invalid",
+                    status="published",
+                    featured=False,
+                    **payload,
+                )
             )
-            sync_vendor_legacy_from_product(v)
-            db.add(v)
             inserted += 1
 
         await db.commit()
 
     wb.close()
     if args.refresh:
-        print(f"xlsx: inserted {inserted}, updated {updated}, skipped {skipped} (no --refresh on duplicate name).")
+        print(f"xlsx: inserted {inserted}, updated {updated}, skipped {skipped}.")
     else:
-        print(f"xlsx: inserted {inserted}, skipped {skipped} (duplicate brand name).")
+        print(f"xlsx: inserted {inserted}, skipped {skipped} (duplicate name; rerun with --refresh to update).")
 
 
 if __name__ == "__main__":

@@ -25,7 +25,6 @@ from app.models.space_offer import SpaceOffer
 from app.models.template import Template
 from app.models.triage import TriageStep
 from app.models.vendor import Vendor
-from app.services.vendor_product_sync import sync_vendor_legacy_from_product
 from app.models.volunteer import Volunteer
 
 router = APIRouter(prefix="/admin/manage", tags=["admin-manage"])
@@ -514,57 +513,62 @@ async def admin_delete_community(
 def _vendor_admin_summary(r: Vendor) -> dict:
     return {
         "id": r.id,
-        "productName": r.product_name,
-        "productDescription": r.product_description,
-        "productPrice": r.product_price,
-        "productCategory": r.product_category,
-        "productStock": r.product_stock,
-        "productImage": r.product_image,
-        "productBrand": r.product_brand,
-        "productRating": r.product_rating,
-        "shopLinks": r.shop_links,
+        "name": r.name,
+        "categories": list(r.categories or []),
+        "description": r.description,
+        "previousPtLocation": r.previous_pt_location,
+        "currentLocation": r.current_location,
+        "logoUrl": r.logo_url,
+        "heroUrl": r.hero_url,
+        "website": r.website,
         "submitted_email": r.submitted_email,
         "status": r.status,
         "featured": r.featured,
-        "pt_listing_id": r.pt_listing_id,
     }
 
 
 def _vendor_admin_full(r: Vendor) -> dict:
-    d = _vendor_admin_summary(r)
-    d["pt_category_names"] = r.pt_category_names or []
-    d["pt_current_locations"] = r.pt_current_locations or []
-    d["pt_previous_locations"] = r.pt_previous_locations or []
-    return d
-
-
-class VendorAdminShopLink(BaseModel):
-    model_config = ConfigDict(str_strip_whitespace=True)
-    label: str = Field(max_length=64)
-    url: str = Field(max_length=2048)
+    return _vendor_admin_summary(r)
 
 
 class VendorAdminUpdate(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, populate_by_name=True)
 
-    product_name: str | None = Field(None, alias="productName", max_length=255)
-    product_description: str | None = Field(None, alias="productDescription")
-    product_price: str | None = Field(None, alias="productPrice", max_length=64)
-    product_category: str | None = Field(None, alias="productCategory", max_length=64)
-    product_stock: str | None = Field(None, alias="productStock", max_length=32)
-    product_image: str | None = Field(None, alias="productImage", max_length=2048)
-    product_brand: str | None = Field(None, alias="productBrand", max_length=255)
-    product_rating: str | None = Field(None, alias="productRating", max_length=32)
-    pt_previous_locations: list[str] | None = None
-    pt_current_locations: list[str] | None = None
-    pt_category_names: list[str] | None = None
-    shop_links: list[VendorAdminShopLink] | None = Field(None, max_length=4)
+    name: str | None = Field(None, max_length=255)
+    categories: list[str] | None = None
+    description: str | None = None
+    previous_pt_location: str | None = Field(None, alias="previousPtLocation")
+    current_location: str | None = Field(None, alias="currentLocation")
+    logo_url: str | None = Field(None, alias="logoUrl", max_length=2048)
+    hero_url: str | None = Field(None, alias="heroUrl", max_length=2048)
+    website: str | None = Field(None, max_length=2048)
     status: str | None = Field(None, pattern="^(pending|published|removed)$")
     featured: bool | None = None
 
 
 class VendorBulkDeleteIn(BaseModel):
     ids: list[int] = Field(min_length=1, max_length=500)
+
+
+def _admin_clean_categories(values: list[str] | None) -> list[str]:
+    if not values:
+        return []
+    seen: set[str] = set()
+    out: list[str] = []
+    for raw in values:
+        if raw is None:
+            continue
+        v = str(raw).strip()[:120]
+        if not v:
+            continue
+        key = v.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(v)
+        if len(out) >= 16:
+            break
+    return out
 
 
 @router.get("/vendors")
@@ -586,6 +590,16 @@ async def admin_vendor_get(admin: CurrentAdmin, vid: int, db: Annotated[AsyncSes
     return _vendor_admin_full(row)
 
 
+_VENDOR_TEXT_FIELDS_MAX = {
+    "description": 65535,
+    "previous_pt_location": 65535,
+    "current_location": 65535,
+    "logo_url": 2048,
+    "hero_url": 2048,
+    "website": 2048,
+}
+
+
 @router.patch("/vendors/{vid}")
 async def admin_vendor_patch(
     admin: CurrentAdmin, vid: int, body: VendorAdminUpdate, db: Annotated[AsyncSession, Depends(get_db)]
@@ -594,21 +608,22 @@ async def admin_vendor_patch(
     if not row:
         raise HTTPException(404, "Not found")
     data = body.model_dump(exclude_unset=True)
-    if "shop_links" in data and data["shop_links"] is not None:
-        data["shop_links"] = [dict(x) for x in data["shop_links"]][:4]
-    _clear_if_empty = (
-        "product_description",
-        "product_price",
-        "product_stock",
-        "product_image",
-        "product_brand",
-        "product_rating",
-    )
+    if "categories" in data:
+        data["categories"] = _admin_clean_categories(data["categories"])
+    if "name" in data and data["name"] is not None:
+        nm = str(data["name"]).strip()[:255]
+        if not nm:
+            raise HTTPException(400, "name cannot be blank")
+        data["name"] = nm
+    for key, max_len in _VENDOR_TEXT_FIELDS_MAX.items():
+        if key in data:
+            val = data[key]
+            if val is None:
+                continue
+            text = str(val).strip()
+            data[key] = text[:max_len] if text else None
     for k, v in data.items():
-        if v == "" and k in _clear_if_empty:
-            v = None
         setattr(row, k, v)
-    sync_vendor_legacy_from_product(row)
     await db.commit()
     await db.refresh(row)
     return _vendor_admin_full(row)
@@ -676,262 +691,28 @@ def _csv_first_value(nr: dict[str, str], *keys: str) -> str:
     return ""
 
 
-def _vendor_csv_merge_marketplace_aliases(nr: dict[str, str]) -> None:
-    """Map marketplace / Main Street style exports (e.g. 4 Good Vibes) to canonical import keys.
-
-    All keys are already lowercased by _csv_row_norm.
-    """
-    if not _csv_first_value(nr, "brand_name", "name"):
-        shop = _csv_first_value(
-            nr,
-            "shop_name",
-            "store_name",
-            "vendor_name",
-            "business_name",
-            "company",
-            "title",
-            "shop",
-        )
-        if shop:
-            nr["brand_name"] = shop
-
-    if not _csv_first_value(nr, "address_line1", "addr1"):
-        line1 = _csv_first_value(
-            nr,
-            "street_address",
-            "address",
-            "street",
-            "street1",
-            "physical_address",
-            "location_address",
-            "addr",
-        )
-        if line1:
-            nr["address_line1"] = line1
-    if not _csv_first_value(nr, "address_line2", "addr2"):
-        line2 = _csv_first_value(nr, "address_line_2", "street2", "suite", "unit")
-        if line2:
-            nr["address_line2"] = line2
-
-    if not _csv_first_value(nr, "postal_code", "zip"):
-        z = _csv_first_value(nr, "postcode", "zip_code", "postal", "zipcode")
-        if z:
-            nr["postal_code"] = z
-
-    if not _csv_first_value(nr, "shop_url", "website", "shop_online_url"):
-        online = _csv_first_value(
-            nr,
-            "shop_online",
-            "online_url",
-            "store_url",
-            "ecommerce_url",
-            "web",
-            "shop_link",
-            "store_link",
-        )
-        if online and not online.lower().startswith(("http://", "https://")):
-            online = f"https://{online.lstrip('/')}"
-        if online:
-            nr["shop_url"] = online
-
-    if not _csv_first_value(nr, "shop_inperson_url", "market_url"):
-        ip = _csv_first_value(
-            nr, "in_person_url", "shop_in_person_url", "local_url", "marketplace_url", "map_url", "location_url"
-        )
-        if ip and not ip.lower().startswith(("http://", "https://")):
-            ip = f"https://{ip.lstrip('/')}"
-        if ip:
-            nr["shop_inperson_url"] = ip
-
-    if not _csv_first_value(nr, "logo_url"):
-        lo = _csv_first_value(nr, "vendor_logo", "logo", "image_url", "image", "thumb_url")
-        if lo:
-            nr["logo_url"] = lo
-    if not _csv_first_value(nr, "banner_url"):
-        ban = _csv_first_value(nr, "vendor_banner", "hero_url", "cover_url", "banner", "header_image")
-        if not ban:
-            # Listing-style exports: hero image URL, else share / OG image when hero is absent
-            ban = _csv_first_value(nr, "hero_image", "hero") or _csv_first_value(
-                nr, "share_image", "share_url", "og_image", "social_image"
-            )
-        if ban:
-            nr["banner_url"] = ban
-
-    if not _csv_first_value(nr, "bio_150", "bio"):
-        tag = _csv_first_value(nr, "tagline", "short_description", "summary", "headline", "blurb", "excerpt")
-        if tag:
-            nr["bio_150"] = tag[:160]
-    if not _csv_first_value(nr, "description_full", "description"):
-        long_ = _csv_first_value(nr, "long_description", "about", "full_description", "details")
-        if long_:
-            nr["description_full"] = long_
-
-    if not _csv_first_value(nr, "pt_category_names", "pt_categories"):
-        raw_tags = _csv_first_value(
-            nr, "tags", "shop_tags", "product_tags", "categories", "all_categories", "shop_categories"
-        )
-        if raw_tags:
-            nr["pt_category_names"] = raw_tags
-    tags_val = (nr.get("pt_category_names") or nr.get("pt_categories") or "").strip()
-    if tags_val and "," in tags_val and "|" not in tags_val:
-        nr["pt_category_names"] = tags_val.replace(",", "|")
-    for loc_key, alt_keys in (
-        ("pt_current_locations", ("current_locations", "locations", "active_locations", "booths", "booth")),
-        ("pt_previous_locations", ("previous_locations", "past_locations", "relocated_from")),
-    ):
-        if not _csv_first_value(nr, loc_key):
-            alt = _csv_first_value(nr, *alt_keys)
-            if alt:
-                nr[loc_key] = alt
-                if "," in alt and "|" not in alt:
-                    nr[loc_key] = alt.replace(",", "|")
-
-    for email_key, alt in (
-        ("submitted_email", ("account_email", "owner_email", "primary_email", "user_email", "reg_email")),
-        ("contact_email", ("business_email", "public_email", "shop_email", "cs_email", "email_public")),
-    ):
-        if not _csv_first_value(nr, email_key):
-            e = _csv_first_value(nr, *alt)
-            if e:
-                nr[email_key] = e
-
-    if not _csv_first_value(nr, "contact_name", "contact"):
-        cname = _csv_first_value(nr, "owner_name", "manager", "shop_contact", "store_contact", "contact_person")
-        if cname:
-            nr["contact_name"] = cname
-    if not _csv_first_value(nr, "phone"):
-        ph = _csv_first_value(nr, "telephone", "mobile", "cell", "phone_number", "tel")
-        if ph:
-            nr["phone"] = ph
-
-    if not _csv_first_value(nr, "pt_listing_id"):
-        lid = _csv_first_value(nr, "listing_id", "sell_now_listing_id")
-        if lid:
-            nr["pt_listing_id"] = lid
-
-    _vendor_csv_merge_product_sheet_aliases(nr)
-
-
-def _vendor_csv_merge_product_sheet_aliases(nr: dict[str, str]) -> None:
-    """Map spreadsheet headers productName…productRating (lowercased keys) onto product_* keys."""
-    if not (nr.get("product_name") or "").strip():
-        v = _csv_first_value(nr, "productname", "title", "brand_name", "name", "shop_name", "vendor_name")
-        if v:
-            nr["product_name"] = v
-    if not (nr.get("product_description") or "").strip():
-        v = _csv_first_value(nr, "productdescription", "description", "description_full", "bio", "bio_150")
-        if v:
-            nr["product_description"] = v
-    if not (nr.get("product_price") or "").strip():
-        v = _csv_first_value(nr, "productprice", "price")
-        if v:
-            nr["product_price"] = v
-    if not (nr.get("product_category") or "").strip():
-        v = _csv_first_value(nr, "productcategory", "category")
-        if v:
-            nr["product_category"] = v
-    if not (nr.get("product_stock") or "").strip():
-        v = _csv_first_value(nr, "productstock", "quantity", "stock")
-        if v:
-            nr["product_stock"] = v
-    if not (nr.get("product_image") or "").strip():
-        v = _csv_first_value(
-            nr,
-            "productimage",
-            "vendor_logo",
-            "logo_url",
-            "banner_url",
-            "vendor_banner",
-            "hero_image",
-            "share_image",
-        )
-        if v:
-            nr["product_image"] = v
-    if not (nr.get("product_brand") or "").strip():
-        v = _csv_first_value(nr, "productbrand", "brand", "brand_name", "shop_name")
-        if v:
-            nr["product_brand"] = v
-    if not (nr.get("product_rating") or "").strip():
-        v = _csv_first_value(nr, "productrating", "rating")
-        if v:
-            nr["product_rating"] = v
-
-
-def _vendor_csv_category(val: str) -> str:
-    s = (val or "").strip()
-    return s[:64] if s else "other"
-
-
-def _vendor_csv_pipe_list(val: str) -> list[str] | None:
+def _vendor_csv_categories(val: str) -> list[str]:
     if not val or not str(val).strip():
-        return None
-    parts = [x.strip() for x in str(val).replace("\n", "|").split("|") if x.strip()]
-    return parts or None
-
-
-def _vendor_csv_shop_links(nr: dict[str, str]) -> list[dict[str, str]]:
-    links: list[dict[str, str]] = []
-    u1 = nr.get("shop_url") or nr.get("website") or nr.get("shop_online_url") or ""
-    if u1:
-        lab = (nr.get("shop_url_label") or nr.get("shop_online_label") or "Shop online")[:64]
-        links.append({"label": lab, "url": u1[:2048]})
-    u2 = nr.get("shop_inperson_url") or nr.get("market_url") or nr.get("shop_in_person_url") or ""
-    if u2:
-        lab2 = (nr.get("shop_inperson_label") or "Shop in person")[:64]
-        links.append({"label": lab2, "url": u2[:2048]})
-    return links[:4]
+        return []
+    raw = str(val).replace("\r", "\n")
+    for sep in ("|", "\n", ","):
+        raw = raw.replace(sep, "|")
+    parts = [p.strip() for p in raw.split("|") if p.strip()]
+    seen: set[str] = set()
+    out: list[str] = []
+    for p in parts:
+        key = p.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(p[:120])
+        if len(out) >= 16:
+            break
+    return out
 
 
 def _vendor_csv_truthy(val: str) -> bool:
     return (val or "").lower() in ("1", "true", "yes", "y")
-
-
-def _vendor_csv_product_listing_hero(
-    nr: dict[str, str],
-    banner_url: str | None,
-    logo_url: str | None,
-    product_image: str | None = None,
-) -> str | None:
-    """Sell-Now board card image: explicit hero, else share/OG, else vendor banner, else logo / product image."""
-    h = _csv_first_value(nr, "hero_image", "hero") or _csv_first_value(
-        nr, "share_image", "share_url", "og_image", "social_image"
-    )
-    if h:
-        return h[:2048]
-    b = (banner_url or "").strip()
-    if b:
-        return b[:2048]
-    lo = (logo_url or "").strip()
-    if lo:
-        return lo[:2048]
-    pi = (product_image or "").strip()
-    if pi:
-        return pi[:2048]
-    return None
-
-
-async def _sync_listing_from_vendor_csv_row(db: AsyncSession, *, nr: dict[str, str], fields: dict) -> None:
-    """When CSV includes ``pt_listing_id`` / ``listing_id``, push product-style columns to that listing row."""
-    pt = fields.get("pt_listing_id")
-    if not isinstance(pt, int) or pt < 1:
-        return
-    row = (await db.execute(select(Listing).where(Listing.id == pt))).scalar_one_or_none()
-    if row is None:
-        return
-    row.brand_or_space_name = str(fields.get("product_name") or fields.get("brand_name") or "")[:512]
-    desc = fields.get("product_description")
-    if desc is None:
-        desc = fields.get("description_full")
-    row.description = desc if isinstance(desc, str) else None
-    cat = (fields.get("product_category") or fields.get("category") or "general").strip() or "general"
-    row.category = cat[:64]
-    hero = _vendor_csv_product_listing_hero(
-        nr,
-        fields.get("banner_url"),
-        fields.get("logo_url"),
-        fields.get("product_image"),
-    )
-    row.hero_image_url = hero[:2048] if hero else None
 
 
 @router.post("/vendors/import-csv")
@@ -941,27 +722,24 @@ async def admin_import_vendors_csv(
     file: Annotated[UploadFile, File()],
     refresh: bool = False,
 ) -> dict:
-    """Import seller rows from CSV. Headers (case-insensitive, aliases in parentheses).
+    """Import vendor listings from the canonical 8-column CSV.
 
-    Common marketplace / Main Street directory layouts (e.g. multi-vendor mall exports) are supported via
-    extra aliases (see :func:`_vendor_csv_merge_marketplace_aliases`).
+    Headers (case-insensitive, in any order):
 
-    Required: ``productName`` (or ``product_name``, ``title``, ``brand_name``, ``name``, ``shop_name``, …).
+    - ``Name`` (required)
+    - ``Categories`` — pipe-, comma-, or newline-separated list (e.g. ``"Apparel | Accessories"``)
+    - ``Description``
+    - ``Previous PT Location``
+    - ``Current Location``
+    - ``Logo URL``
+    - ``Hero/Banner URL`` (also accepts ``Hero URL``)
+    - ``Website``
 
-    The eight product columns: ``productName``, ``productDescription``, ``productPrice``, ``productCategory``,
-    ``productStock``, ``productImage``, ``productBrand``, ``productRating`` (aliases and legacy headers are merged —
-    see :func:`_vendor_csv_merge_product_sheet_aliases`).
+    Optional internal columns: ``status`` (default ``published``), ``featured``,
+    ``submitted_email`` / ``email``, and ``id`` (used with ``refresh=true``).
 
-    Optional: ``city``, ``state``, ``zip`` / ``postal_code``, address, phone, ``submitted_email`` / ``email``,
-    ``shop_url`` / ``shop_inperson_url``, ``status`` (default ``published``), ``featured``,
-    ``pt_category_names``, ``pt_current_locations``, ``pt_previous_locations``,
-    ``pt_listing_id`` / ``listing_id`` / ``sell_now_listing_id`` (updates linked Sell-Now listing card).
-
-    ``id`` (when ``refresh`` is true, update this vendor by id instead of insert).
-
-    If ``submitted_email`` and ``contact_email`` are both empty, a placeholder ``@invalid`` address is used.
-    When ``refresh=false`` (default), skips rows whose ``productName`` already exists (case-insensitive).
-    When ``refresh=true``, updates by ``id`` if given, else first vendor matching ``productName``.
+    When ``refresh=false`` (default), rows whose ``Name`` already exists (case-insensitive) are skipped.
+    When ``refresh=true``, the import updates by ``id`` if provided, otherwise by case-insensitive ``Name``.
     """
     _ = admin
     raw = await file.read()
@@ -980,18 +758,12 @@ async def admin_import_vendors_csv(
     for line_no, row in enumerate(reader, start=2):
         try:
             nr = _csv_row_norm(row)
-            _vendor_csv_merge_marketplace_aliases(nr)
-            product_name = (
-                (nr.get("product_name") or nr.get("productname") or nr.get("brand_name") or nr.get("name") or "")
-                .strip()
-            )
-            if not product_name:
+            name = _csv_first_value(nr, "name").strip()
+            if not name:
                 skipped += 1
                 continue
 
-            sub_email = (
-                nr.get("submitted_email") or nr.get("email") or nr.get("contact_email") or ""
-            ).strip()
+            sub_email = _csv_first_value(nr, "submitted_email", "email")
             if not sub_email:
                 sub_email = f"csv-import-{line_no}-{secrets.token_hex(4)}@invalid"
 
@@ -999,68 +771,29 @@ async def admin_import_vendors_csv(
             if status not in ("pending", "published", "removed"):
                 status = "published"
 
-            city = (nr.get("city") or "").strip() or None
-            state = (nr.get("state") or nr.get("st") or "").strip()[:8] or None
-            product_category = _vendor_csv_category(
-                nr.get("product_category") or nr.get("productcategory") or nr.get("category")
+            categories = _vendor_csv_categories(_csv_first_value(nr, "categories"))
+            description = _csv_first_value(nr, "description") or None
+            previous_pt = _csv_first_value(nr, "previous pt location", "previous_pt_location") or None
+            current_location = _csv_first_value(nr, "current location", "current_location") or None
+            logo_url = _csv_first_value(nr, "logo url", "logo_url") or None
+            hero_url = (
+                _csv_first_value(nr, "hero/banner url", "hero url", "hero_url", "banner url", "banner_url") or None
             )
-            product_description = (
-                (nr.get("product_description") or nr.get("productdescription") or nr.get("description_full") or nr.get("description") or "")
-                .strip()
-                or None
-            )
-            product_price = (nr.get("product_price") or nr.get("productprice") or "").strip()[:64] or None
-            product_stock = (nr.get("product_stock") or nr.get("productstock") or "").strip()[:32] or None
-            product_image = (nr.get("product_image") or nr.get("productimage") or "").strip()[:2048] or None
-            product_brand = (nr.get("product_brand") or nr.get("productbrand") or "").strip()[:255] or None
-            product_rating = (nr.get("product_rating") or nr.get("productrating") or "").strip()[:32] or None
-            bio = (product_description[:160] if product_description else None) or (
-                (nr.get("bio_150") or nr.get("bio") or "").strip()[:160] or None
-            )
+            website = _csv_first_value(nr, "website") or None
 
             fields = {
-                "product_name": product_name[:255],
-                "product_description": product_description,
-                "product_price": product_price,
-                "product_category": product_category,
-                "product_stock": product_stock,
-                "product_image": product_image,
-                "product_brand": product_brand,
-                "product_rating": product_rating,
-                "brand_name": product_name[:255],
-                "category": product_category,
-                "city": city[:255] if city else None,
-                "state": state,
-                "address_line1": (nr.get("address_line1") or nr.get("addr1") or "").strip()[:255] or None,
-                "address_line2": (nr.get("address_line2") or nr.get("addr2") or "").strip()[:255] or None,
-                "postal_code": (nr.get("postal_code") or nr.get("zip") or "").strip()[:32] or None,
-                "phone": (nr.get("phone") or "").strip()[:64] or None,
-                "fax": (nr.get("fax") or "").strip()[:64] or None,
-                "contact_name": (nr.get("contact_name") or nr.get("contact") or "").strip()[:255] or None,
-                "contact_email": (nr.get("contact_email") or "").strip()[:255] or None,
-                "bio_150": bio,
-                "description_full": product_description,
-                "shop_links": _vendor_csv_shop_links(nr),
+                "name": name[:255],
+                "categories": categories,
+                "description": description,
+                "previous_pt_location": previous_pt,
+                "current_location": current_location,
+                "logo_url": logo_url[:2048] if logo_url else None,
+                "hero_url": hero_url[:2048] if hero_url else None,
+                "website": website[:2048] if website else None,
                 "submitted_email": sub_email[:255],
                 "status": status,
                 "featured": _vendor_csv_truthy(nr.get("featured")),
-                "logo_url": product_image,
-                "banner_url": product_image,
-                "pt_category_names": _vendor_csv_pipe_list(
-                    nr.get("pt_category_names") or nr.get("pt_categories") or ""
-                ),
-                "pt_current_locations": _vendor_csv_pipe_list(
-                    nr.get("pt_current_locations") or nr.get("current_locations") or ""
-                ),
-                "pt_previous_locations": _vendor_csv_pipe_list(
-                    nr.get("pt_previous_locations") or nr.get("previous_locations") or ""
-                ),
             }
-            pt_id_raw = (nr.get("pt_listing_id") or "").strip()
-            if pt_id_raw.isdigit():
-                fields["pt_listing_id"] = int(pt_id_raw)
-            else:
-                fields["pt_listing_id"] = None
 
             existing: Vendor | None = None
             vid_raw = (nr.get("id") or nr.get("vendor_id") or "").strip()
@@ -1074,33 +807,25 @@ async def admin_import_vendors_csv(
                     continue
             elif refresh:
                 existing = (
-                    await db.execute(select(Vendor).where(func.lower(Vendor.product_name) == product_name.lower()))
+                    await db.execute(select(Vendor).where(func.lower(Vendor.name) == name.lower()))
                 ).scalars().first()
 
             if existing is not None and refresh:
                 for k, v in fields.items():
                     setattr(existing, k, v)
-                sync_vendor_legacy_from_product(existing)
                 updated += 1
-                await _sync_listing_from_vendor_csv_row(db, nr=nr, fields=fields)
             elif existing is None and not refresh:
                 dup = (
-                    await db.execute(select(Vendor).where(func.lower(Vendor.product_name) == product_name.lower()))
+                    await db.execute(select(Vendor).where(func.lower(Vendor.name) == name.lower()))
                 ).scalars().first()
                 if dup:
                     skipped += 1
                     continue
-                row = Vendor(**fields)
-                sync_vendor_legacy_from_product(row)
-                db.add(row)
+                db.add(Vendor(**fields))
                 created += 1
-                await _sync_listing_from_vendor_csv_row(db, nr=nr, fields=fields)
             elif existing is None and refresh:
-                row = Vendor(**fields)
-                sync_vendor_legacy_from_product(row)
-                db.add(row)
+                db.add(Vendor(**fields))
                 created += 1
-                await _sync_listing_from_vendor_csv_row(db, nr=nr, fields=fields)
         except Exception as e:  # noqa: BLE001 — per-row import resilience
             errors.append(f"Line {line_no}: {e}")
             skipped += 1

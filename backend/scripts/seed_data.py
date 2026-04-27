@@ -314,29 +314,23 @@ async def main() -> None:
                 ]
             )
 
-        cats = ["jewelry", "food", "clothing", "art", "beauty", "home", "other"]
+        cats = ["Jewelry", "Food", "Clothing", "Art", "Beauty", "Home", "Other"]
+        cities = ["Portland, OR", "Austin, TX", "Atlanta, GA", "Denver, CO", "Tampa, FL"]
         for i in range(22):
             name = f"Demo Vendor {i + 1}"
-            if (await db.execute(select(Vendor).where(Vendor.product_name == name))).scalar_one_or_none():
+            if (await db.execute(select(Vendor).where(Vendor.name == name))).scalar_one_or_none():
                 continue
             desc = "We relocated after our market closed. Shop our new links!"
             db.add(
                 Vendor(
-                    product_name=name,
-                    product_description=desc,
-                    product_price=str(12 + i),
-                    product_category=cats[i % len(cats)],
-                    product_stock=str(25 + i),
-                    product_image=None,
-                    product_brand=f"{name} Co.",
-                    product_rating="4.7",
-                    brand_name=name,
-                    category=cats[i % len(cats)],
-                    city="Portland",
-                    state=["OR", "CA", "NY", "TX", "FL"][i % 5],
-                    bio_150=desc[:160],
-                    description_full=desc,
-                    shop_links=[{"label": "Shop", "url": "https://example.org"}],
+                    name=name,
+                    categories=[cats[i % len(cats)]],
+                    description=desc,
+                    previous_pt_location=f"Painted Tree {cities[i % len(cities)]}",
+                    current_location=cities[(i + 1) % len(cities)],
+                    logo_url=None,
+                    hero_url=None,
+                    website="https://example.org",
                     submitted_email=f"vendor{i}@example.com",
                     status="published",
                     featured=i == 0,

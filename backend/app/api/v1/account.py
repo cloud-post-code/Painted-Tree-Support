@@ -23,10 +23,11 @@ def _iso(value: datetime | None) -> str | None:
 
 
 def _vendor_subtitle(v: Vendor) -> str:
-    parts = [x for x in (v.product_brand, v.product_category) if x and str(x).strip()]
-    if parts:
-        return " · ".join(str(p).strip() for p in parts)
-    return "Product listing"
+    cats = [str(c).strip() for c in (v.categories or []) if str(c).strip()]
+    if cats:
+        return " · ".join(cats[:2])
+    location = (v.current_location or v.previous_pt_location or "").strip()
+    return location or "Vendor listing"
 
 
 @router.get("/submissions")
@@ -75,11 +76,11 @@ async def list_my_submissions(
             {
                 "id": v.id,
                 "kind": "vendor",
-                "title": v.product_name,
+                "title": v.name,
                 "subtitle": _vendor_subtitle(v),
                 "status": v.status,
                 "created_at": _iso(v.created_at),
-                "permalink": f"/vendors/{v.id}" if v.status == "published" else None,
+                "permalink": "/vendors" if v.status == "published" else None,
             }
             for v in vendors
         ],

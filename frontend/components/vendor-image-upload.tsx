@@ -10,11 +10,11 @@ import { apiUrl, readResponseBodyJson, resolveMediaUrl } from "@/lib/api";
 import { getCroppedImgAsJpeg } from "@/lib/cropImage";
 import { cn } from "@/lib/utils";
 
-type Kind = "logo" | "banner";
+type Kind = "logo" | "hero";
 
 const ASPECT: Record<Kind, number> = {
   logo: 1,
-  banner: 2,
+  hero: 2,
 };
 
 const COPY: Record<Kind, { title: string; hint: string; output: string }> = {
@@ -23,8 +23,8 @@ const COPY: Record<Kind, { title: string; hint: string; output: string }> = {
     hint: "Paste a link to your logo image, or upload a file. Square works best; uploads are cropped to 512×512.",
     output: "Uploads are saved as 512×512 px (square).",
   },
-  banner: {
-    title: "Banner / hero image",
+  hero: {
+    title: "Hero / banner image",
     hint: "Paste a link to a wide image, or upload a file. Uploads are cropped to 1200×600 (2∶1).",
     output: "Uploads are saved as 1200×600 px (2∶1).",
   },

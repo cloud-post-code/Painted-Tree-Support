@@ -8,13 +8,9 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { readResponseBodyJson } from "@/lib/api";
 
-// Canonical vendor CSV: exactly eight product columns (same names as DB / survey), plus optional operational columns.
-const VENDOR_CSV_TEMPLATE = `productName,productDescription,productPrice,productCategory,productStock,productImage,productBrand,productRating,submitted_email,shop_url,shop_inperson_url,status,featured,pt_listing_id,id
-"Wireless Headphones","High-quality noise-canceling wireless headphones.",199.99,Electronics,50,https://example.com/images/headphones.jpg,SoundPro,4.8,seller@example.com,https://store.example.com,,published,false,,`;
-
-// Same eight columns with legacy aliases (title → productName, etc.) still supported by the importer.
-const VENDOR_CSV_LEGACY_ALIASES_TEMPLATE = `title,description,price,category,quantity,vendor_logo,vendor_banner,hero_image,share_image,pt_listing_id,submitted_email
-"Sample Maker",Handmade candles and gifts,24.99,Gifts,12,https://images.example.com/logo.jpg,,https://images.example.com/card-hero.jpg,https://images.example.com/og-share.jpg,,seller@example.com`;
+// Canonical 8-column vendor CSV (same headers as the public spreadsheet / submit form).
+const VENDOR_CSV_TEMPLATE = `Name,Categories,Description,Previous PT Location,Current Location,Logo URL,Hero/Banner URL,Website
+"Sample Maker","Apparel | Accessories","Handmade clothing and small leather goods.","Painted Tree Phoenix, AZ","Online + pop-ups in Tempe, AZ","https://example.com/logos/sample.png","https://example.com/heroes/sample.jpg","https://sample-maker.example.com"`;
 
 type ImportResult = {
   created: number;
@@ -25,8 +21,10 @@ type ImportResult = {
 
 type Row = {
   id: number;
-  productName: string;
-  productCategory?: string;
+  name: string;
+  categories?: string[];
+  currentLocation?: string | null;
+  previousPtLocation?: string | null;
   status: string;
   submitted_email?: string;
 };
@@ -63,8 +61,10 @@ export default function AdminVendorsPage() {
     const s = q.toLowerCase();
     return published.filter((r) => {
       const hay = [
-        r.productName,
-        r.productCategory || "",
+        r.name,
+        (r.categories || []).join(" "),
+        r.currentLocation || "",
+        r.previousPtLocation || "",
         r.submitted_email || "",
         String(r.id),
       ]
@@ -167,33 +167,24 @@ export default function AdminVendorsPage() {
   return (
     <div className="space-y-10">
       <section className="rounded-lg border border-black/10 bg-black/[0.02] p-4">
-        <h2 className="text-lg font-bold">Import sellers (CSV)</h2>
+        <h2 className="text-lg font-bold">Import vendors (CSV)</h2>
         <p className="mt-1 text-sm text-black/65">
-          Required column: <code className="text-xs">productName</code> (or legacy <code className="text-xs">title</code>{" "}
-          / <code className="text-xs">brand_name</code>). The eight product fields are{" "}
-          <code className="text-xs">productName</code>, <code className="text-xs">productDescription</code>,{" "}
-          <code className="text-xs">productPrice</code>, <code className="text-xs">productCategory</code>,{" "}
-          <code className="text-xs">productStock</code>, <code className="text-xs">productImage</code>,{" "}
-          <code className="text-xs">productBrand</code>, <code className="text-xs">productRating</code>. Optional:{" "}
-          <code className="text-xs">submitted_email</code>, shop URLs, <code className="text-xs">status</code>,{" "}
-          <code className="text-xs">featured</code>, <code className="text-xs">pt_listing_id</code> (or{" "}
-          <code className="text-xs">listing_id</code>) to sync a Sell-Now listing card. Older marketplace-style columns
-          are still accepted via aliases. See{" "}
-          <a
-            href="https://medford.4goodvibes.shop/"
-            className="font-medium text-[var(--vrr-teal)] underline"
-            target="_blank"
-            rel="noreferrer"
-          >
-            4 Good Vibes
-          </a>
-          . New rows default to <strong>published</strong> unless <code className="text-xs">status</code> is{" "}
-          <code className="text-xs">pending</code> or <code className="text-xs">removed</code>.
+          Required column: <code className="text-xs">Name</code>. The eight canonical columns are{" "}
+          <code className="text-xs">Name</code>, <code className="text-xs">Categories</code>,{" "}
+          <code className="text-xs">Description</code>, <code className="text-xs">Previous PT Location</code>,{" "}
+          <code className="text-xs">Current Location</code>, <code className="text-xs">Logo URL</code>,{" "}
+          <code className="text-xs">Hero/Banner URL</code>, <code className="text-xs">Website</code>. Optional internal
+          columns: <code className="text-xs">submitted_email</code>, <code className="text-xs">status</code>{" "}
+          (defaults to <strong>published</strong>; also accepts <code className="text-xs">pending</code> /{" "}
+          <code className="text-xs">removed</code>), <code className="text-xs">featured</code>, and{" "}
+          <code className="text-xs">id</code> (used with refresh).
         </p>
         <p className="mt-2 text-sm text-black/65">
-          <strong>Without &quot;refresh&quot;:</strong> skips rows if that <code className="text-xs">productName</code>{" "}
-          already exists. <strong>With refresh:</strong> updates by <code className="text-xs">id</code> if present,
-          otherwise the first vendor with the same productName (case-insensitive).
+          Categories accept <code className="text-xs">|</code>, comma, or newline separators (e.g.{" "}
+          <code className="text-xs">&quot;Apparel | Accessories&quot;</code>).{" "}
+          <strong>Without &quot;refresh&quot;:</strong> rows whose <code className="text-xs">Name</code>{" "}
+          already exists are skipped. <strong>With refresh:</strong> updates by <code className="text-xs">id</code>{" "}
+          if present, otherwise the first vendor with the same Name (case-insensitive).
         </p>
         <div className="mt-4 flex flex-wrap items-end gap-3">
           <div>
@@ -210,18 +201,9 @@ export default function AdminVendorsPage() {
           <Button
             type="button"
             variant="secondary"
-            onClick={() => downloadCsvTemplate(VENDOR_CSV_TEMPLATE, "vendors-product-import-template.csv")}
+            onClick={() => downloadCsvTemplate(VENDOR_CSV_TEMPLATE, "vendors-import-template.csv")}
           >
-            Download product template (8 columns)
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() =>
-              downloadCsvTemplate(VENDOR_CSV_LEGACY_ALIASES_TEMPLATE, "vendors-import-legacy-aliases-template.csv")
-            }
-          >
-            Download legacy alias template
+            Download CSV template (8 columns)
           </Button>
         </div>
         {importErr ? <p className="mt-3 text-sm text-red-700">{importErr}</p> : null}
@@ -235,7 +217,7 @@ export default function AdminVendorsPage() {
           {pending.map((r) => (
             <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 rounded border p-2">
               <span>
-                #{r.id} {r.productName}
+                #{r.id} {r.name}
               </span>
               <div className="flex gap-2">
                 <Link
@@ -257,7 +239,7 @@ export default function AdminVendorsPage() {
       <section>
         <h2 className="text-lg font-bold">Published vendors</h2>
         <p className="mt-1 text-sm text-black/60">
-          Edit listings anytime (including on Railway). Changes apply to the public directory immediately after save.
+          Edit listings anytime. Changes apply to the public directory immediately after save.
         </p>
         <div className="mt-4 max-w-md">
           <Label htmlFor="search">Search published</Label>
@@ -265,15 +247,27 @@ export default function AdminVendorsPage() {
             id="search"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Product name, category, email, id…"
+            placeholder="Name, category, location, email, id…"
             className="mt-1"
           />
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <Button type="button" size="sm" variant="secondary" onClick={selectAllFilteredPublished} disabled={!filteredPublished.length || deleteBusy}>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={selectAllFilteredPublished}
+            disabled={!filteredPublished.length || deleteBusy}
+          >
             Select all shown
           </Button>
-          <Button type="button" size="sm" variant="secondary" onClick={clearSelected} disabled={!selected.length || deleteBusy}>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={clearSelected}
+            disabled={!selected.length || deleteBusy}
+          >
             Clear selection
           </Button>
           <Button
@@ -290,33 +284,36 @@ export default function AdminVendorsPage() {
         {deleteErr ? <p className="mt-2 text-sm text-red-700">{deleteErr}</p> : null}
         {deleteMsg ? <p className="mt-2 text-sm text-green-800">{deleteMsg}</p> : null}
         <ul className="mt-4 space-y-2 text-sm">
-          {filteredPublished.map((r) => (
-            <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 rounded border p-2">
-              <label className="flex cursor-pointer items-start gap-2">
-                <input
-                  type="checkbox"
-                  checked={selected.includes(r.id)}
-                  onChange={() => toggleSelected(r.id)}
-                  disabled={deleteBusy}
-                  aria-label={`Select vendor ${r.productName}`}
-                />
-                <span>
-                  #{r.id} <span className="font-medium">{r.productName}</span>
-                  <span className="text-black/55">
-                    {" "}
-                    ·{" "}
-                    {r.productCategory || "—"}
+          {filteredPublished.map((r) => {
+            const cat = (r.categories || [])[0];
+            const loc = r.currentLocation || r.previousPtLocation || "";
+            return (
+              <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 rounded border p-2">
+                <label className="flex cursor-pointer items-start gap-2">
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(r.id)}
+                    onChange={() => toggleSelected(r.id)}
+                    disabled={deleteBusy}
+                    aria-label={`Select vendor ${r.name}`}
+                  />
+                  <span>
+                    #{r.id} <span className="font-medium">{r.name}</span>
+                    <span className="text-black/55">
+                      {" "}
+                      · {cat || "—"} · {loc || "—"}
+                    </span>
                   </span>
-                </span>
-              </label>
-              <Link
-                href={`/admin/vendors/${r.id}`}
-                className={cn(buttonVariants({ variant: "secondary", size: "sm" }))}
-              >
-                Edit
-              </Link>
-            </li>
-          ))}
+                </label>
+                <Link
+                  href={`/admin/vendors/${r.id}`}
+                  className={cn(buttonVariants({ variant: "secondary", size: "sm" }))}
+                >
+                  Edit
+                </Link>
+              </li>
+            );
+          })}
         </ul>
         {!published.length ? <p className="mt-2 text-sm text-black/50">No published vendors yet.</p> : null}
         {published.length > 0 && !filteredPublished.length ? (
